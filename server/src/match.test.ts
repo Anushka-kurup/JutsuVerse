@@ -70,30 +70,41 @@ test("elemental counter wins a clash regardless of level", () => {
   };
   const next = tickMatch(m);
   assert.equal(next.fighters.a.hp, MAX_HP);
-  assert.equal(next.fighters.b.hp, MAX_HP - 15);
+  assert.equal(next.fighters.b.hp, MAX_HP - 1);
   assert.deepEqual(next.pendingAttacks, { a: null, b: null });
 });
 
-test("opposite elements use the base-damage difference", () => {
+test("higher-level counter deals its own damage and takes none", () => {
+  const m = liveMatch();
+  m.pendingAttacks = {
+    a: pending("a", "fire_3"),
+    b: pending("b", "wind_1"),
+  };
+  const next = tickMatch(m);
+  assert.equal(next.fighters.a.hp, MAX_HP);
+  assert.equal(next.fighters.b.hp, MAX_HP - 4);
+});
+
+test("opposite elements both land their own damage", () => {
   const m = liveMatch();
   m.pendingAttacks = {
     a: pending("a", "fire_1"),
     b: pending("b", "earth_3"),
   };
   const next = tickMatch(m);
-  assert.equal(next.fighters.a.hp, MAX_HP - 3);
-  assert.equal(next.fighters.b.hp, MAX_HP);
+  assert.equal(next.fighters.a.hp, MAX_HP - 4);
+  assert.equal(next.fighters.b.hp, MAX_HP - 1);
 });
 
-test("equal-level non-countering attacks deal no damage", () => {
+test("equal-level non-countering attacks both land", () => {
   const m = liveMatch();
   m.pendingAttacks = {
     a: pending("a", "fire_2"),
     b: pending("b", "earth_2"),
   };
   const next = tickMatch(m);
-  assert.equal(next.fighters.a.hp, MAX_HP);
-  assert.equal(next.fighters.b.hp, MAX_HP);
+  assert.equal(next.fighters.a.hp, MAX_HP - 2);
+  assert.equal(next.fighters.b.hp, MAX_HP - 2);
 });
 
 test("one-second clash window is inclusive and rejects later attacks", () => {
@@ -103,7 +114,8 @@ test("one-second clash window is inclusive and rejects later attacks", () => {
     b: pending("b", "wind_1", 20, 40),
   };
   const clashed = tickMatch(inside);
-  assert.equal(clashed.fighters.b.hp, MAX_HP - 15);
+  assert.equal(clashed.fighters.a.hp, MAX_HP);
+  assert.equal(clashed.fighters.b.hp, MAX_HP - 1);
 
   const outside = { ...liveMatch(), tick: 19 };
   outside.pendingAttacks = {

@@ -54,7 +54,7 @@ export const SHIELD_MAX_TICKS = TICK_HZ * 10;
 
 export const JoinMsg = z.object({
   type: z.literal("join"),
-  code: z.string().min(1).max(8).optional(),
+  code: z.string().min(1).max(3).optional(),
   name: z.string().min(1).max(24).optional(),
 });
 
