@@ -17,6 +17,15 @@ let cameraLoopId: number | null = null;
 let activeCamSign = "UNKNOWN";
 let signButtons: Record<string, HTMLButtonElement> = {};
 
+// ── peer-to-peer video call (see opponent's webcam) ───────────────
+const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+let peerConnection: RTCPeerConnection | null = null;
+let localStream: MediaStream | null = null;
+let opponentId: string | null = null;
+let isInitiator = false;
+let pendingOffer: RTCSessionDescriptionInit | null = null;
+let pendingIce: RTCIceCandidateInit[] = [];
+
 // ── connect screen ──────────────────────────────────────────────
 function renderConnectScreen(errorMsg?: string) {
   app.innerHTML = `
@@ -65,6 +74,16 @@ function connect(server: string, room: string, player: string) {
     } else if (msg.type === "error") {
       socket.close();
       renderConnectScreen(msg.message);
+    } else if (msg.type === "webrtc-peer") {
+      opponentId = msg.peer_id;
+      isInitiator = msg.initiator;
+      trySetupWebRTC().catch(console.error);
+    } else if (msg.type === "webrtc-offer") {
+      handleRemoteOffer(msg.sdp).catch(console.error);
+    } else if (msg.type === "webrtc-answer") {
+      peerConnection?.setRemoteDescription(msg.sdp).catch(console.error);
+    } else if (msg.type === "webrtc-ice") {
+      handleRemoteIce(msg.candidate).catch(console.error);
     }
   });
 
@@ -73,6 +92,7 @@ function connect(server: string, room: string, player: string) {
       ws = null;
       stopHolding();
       shutdownCamera();
+      resetWebRTC();
       renderConnectScreen("Disconnected from server");
     }
   });
@@ -114,10 +134,17 @@ function renderGameScreen() {
       <div class="panel" id="panel-me"></div>
       <div class="panel" id="panel-opp"></div>
     </div>
-    <div class="camera-box">
-      <video id="cam-video" autoplay playsinline muted></video>
-      <canvas id="cam-canvas" width="480" height="360"></canvas>
-      <div class="cam-sign" id="cam-sign">—</div>
+    <div class="camera-row">
+      <div class="camera-box">
+        <video id="cam-video" autoplay playsinline muted></video>
+        <canvas id="cam-canvas" width="480" height="360"></canvas>
+        <div class="cam-sign" id="cam-sign">—</div>
+        <div class="cam-label">You</div>
+      </div>
+      <div class="camera-box">
+        <video id="remote-video" autoplay playsinline></video>
+        <div class="cam-label">Opponent</div>
+      </div>
     </div>
     <div class="actions-row">
       <button class="cam-btn" id="cam-toggle">Enable camera</button>
@@ -157,6 +184,83 @@ function renderGameScreen() {
   });
 }
 
+// ── peer-to-peer video call ───────────────────────────────────────
+function createPeerConnection(): RTCPeerConnection {
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  pc.onicecandidate = (e) => {
+    if (e.candidate) send({ type: "webrtc-ice", candidate: e.candidate.toJSON() });
+  };
+  pc.ontrack = (e) => {
+    const remoteVideo = document.querySelector<HTMLVideoElement>("#remote-video");
+    if (remoteVideo) remoteVideo.srcObject = e.streams[0];
+  };
+  peerConnection = pc;
+  return pc;
+}
+
+async function flushPendingIce(pc: RTCPeerConnection) {
+  const queued = pendingIce;
+  pendingIce = [];
+  for (const candidate of queued) {
+    await pc.addIceCandidate(candidate);
+  }
+}
+
+// called once we know the opponent's id AND our own camera is on —
+// whichever happens second triggers the handshake
+async function trySetupWebRTC() {
+  if (!localStream || opponentId === null || peerConnection) return;
+  const pc = createPeerConnection();
+  localStream.getTracks().forEach((track) => pc.addTrack(track, localStream!));
+
+  if (pendingOffer) {
+    const offer = pendingOffer;
+    pendingOffer = null;
+    await pc.setRemoteDescription(offer);
+    await flushPendingIce(pc);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    send({ type: "webrtc-answer", sdp: pc.localDescription! });
+  } else if (isInitiator) {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    send({ type: "webrtc-offer", sdp: pc.localDescription! });
+  }
+}
+
+async function handleRemoteOffer(sdp: RTCSessionDescriptionInit) {
+  if (!peerConnection) {
+    // opponent's camera came on before ours — remember the offer and
+    // answer it once we enable our own camera
+    pendingOffer = sdp;
+    return;
+  }
+  await peerConnection.setRemoteDescription(sdp);
+  await flushPendingIce(peerConnection);
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+  send({ type: "webrtc-answer", sdp: peerConnection.localDescription! });
+}
+
+async function handleRemoteIce(candidate: RTCIceCandidateInit) {
+  if (peerConnection && peerConnection.remoteDescription) {
+    await peerConnection.addIceCandidate(candidate);
+  } else {
+    pendingIce.push(candidate);
+  }
+}
+
+function resetWebRTC() {
+  peerConnection?.close();
+  peerConnection = null;
+  opponentId = null;
+  isInitiator = false;
+  pendingOffer = null;
+  pendingIce = [];
+  const remoteVideo = document.querySelector<HTMLVideoElement>("#remote-video");
+  if (remoteVideo) remoteVideo.srcObject = null;
+}
+
 // ── camera toggle + detection loop ──────────────────────────────
 function shutdownCamera() {
   if (!cameraOn) return;
@@ -164,6 +268,7 @@ function shutdownCamera() {
   if (cameraLoopId !== null) cancelAnimationFrame(cameraLoopId);
   cameraLoopId = null;
   if (video) stopCamera(video);
+  localStream = null;
   activeCamSign = "UNKNOWN";
   cameraOn = false;
 }
@@ -178,6 +283,8 @@ async function toggleCamera(toggleBtn: HTMLButtonElement) {
     cameraLoopId = null;
     stopCamera(video);
     stopHolding();
+    resetWebRTC();
+    localStream = null;
     activeCamSign = "UNKNOWN";
     cameraOn = false;
     toggleBtn.textContent = "Enable camera";
@@ -189,11 +296,12 @@ async function toggleCamera(toggleBtn: HTMLButtonElement) {
     toggleBtn.textContent = "Starting…";
     toggleBtn.disabled = true;
     await initHandLandmarker();
-    await startCamera(video);
+    localStream = await startCamera(video);
     cameraOn = true;
     toggleBtn.textContent = "Disable camera";
     toggleBtn.classList.add("active");
     runCameraLoop(video, canvas);
+    trySetupWebRTC().catch(console.error);
   } catch (err) {
     console.error(err);
     toggleBtn.textContent = "Camera failed — retry";

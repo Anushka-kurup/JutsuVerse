@@ -61,13 +61,14 @@ export function detectFrame(video: HTMLVideoElement, nowMs: number): FrameResult
   return { sign: "UNKNOWN", landmarks: null };
 }
 
-export async function startCamera(video: HTMLVideoElement): Promise<void> {
+export async function startCamera(video: HTMLVideoElement): Promise<MediaStream> {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { width: 480, height: 360, facingMode: "user" },
     audio: false,
   });
   video.srcObject = stream;
   await video.play();
+  return stream;
 }
 
 export function stopCamera(video: HTMLVideoElement): void {

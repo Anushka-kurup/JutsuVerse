@@ -18,11 +18,18 @@ export interface MatchPublic {
 
 export type ServerMessage =
   | { type: "state"; match: MatchPublic }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "webrtc-peer"; peer_id: string; initiator: boolean }
+  | { type: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
+  | { type: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
+  | { type: "webrtc-ice"; candidate: RTCIceCandidateInit };
 
 export type ClientMessage =
   | { type: "sign"; sign: string }
-  | { type: "reset" };
+  | { type: "reset" }
+  | { type: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
+  | { type: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
+  | { type: "webrtc-ice"; candidate: RTCIceCandidateInit };
 
 export interface SignDef {
   sign: string;

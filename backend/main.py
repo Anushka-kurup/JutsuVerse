@@ -49,6 +49,10 @@ async def ws_endpoint(websocket: WebSocket, room_id: str, player_id: str):
     if len(room.sockets) == 2 and room.engine is None:
         p1_id, p2_id = list(room.sockets.keys())
         room.engine = GameEngine(p1_id, p2_id)
+        # tell each player who their opponent is and who should start the
+        # WebRTC handshake, so browser video calls can be set up peer-to-peer
+        await room.sockets[p1_id].send_text(json.dumps({"type": "webrtc-peer", "peer_id": p2_id, "initiator": True}))
+        await room.sockets[p2_id].send_text(json.dumps({"type": "webrtc-peer", "peer_id": p1_id, "initiator": False}))
         await room.broadcast_state()
 
     try:
@@ -61,6 +65,11 @@ async def ws_endpoint(websocket: WebSocket, room_id: str, player_id: str):
                 p1_id, p2_id = room.engine.match.p1.player_id, room.engine.match.p2.player_id
                 room.engine = GameEngine(p1_id, p2_id)
                 await room.broadcast_state()
+            elif msg.get("type") in ("webrtc-offer", "webrtc-answer", "webrtc-ice"):
+                # pure signaling relay: forward to the other socket in the room
+                for pid, sock in room.sockets.items():
+                    if pid != player_id:
+                        await sock.send_text(json.dumps(msg))
     except WebSocketDisconnect:
         room.sockets.pop(player_id, None)
         if not room.sockets:
