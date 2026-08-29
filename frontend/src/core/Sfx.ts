@@ -11,7 +11,10 @@ const SFX_VOLUME = 0.7;
  * Adding water, wind or earth is dropping `<element>.mp3` into
  * public/audio/sfx/ and adding its name here — nothing else changes.
  */
-const CLIPS = ["fire", "water"] as const;
+// `wind` has no move in the game right now — shared/skills.ts is a three-element
+// cycle (Water > Fire > Earth). The clip is here and will play the moment a
+// WIND skill exists again; until then nothing ever asks for it.
+const CLIPS = ["fire", "water", "earth", "wind"] as const;
 
 /**
  * Short attack sounds, played as fire-and-forget one-shots.
