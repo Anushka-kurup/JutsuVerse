@@ -1,0 +1,17 @@
+{
+  "name": "jutsu-duel",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "test": "npm test -w server",
+    "typecheck": "npm run typecheck -w @jutsu/protocol && npm run typecheck -w server && npm run typecheck -w client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
