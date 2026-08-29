@@ -70,7 +70,6 @@ export class BattleScene extends Phaser.Scene {
 
     Overlay.showSealHud();
     Overlay.showSkillPanel();
-    Overlay.showSealNow();
     // pre-round: enable camera to ready up, then the 3·2·1 countdown
     Overlay.showPrep();
     Overlay.setPrepStatus("Enable your camera to ready up");
@@ -132,7 +131,6 @@ export class BattleScene extends Phaser.Scene {
     this.matcher.feed(d.id);
     if (this.started) net.setHeldSign(d.id);
     this.preview.setSign(d.id, d.score);
-    Overlay.setSealNow(d.id, d.score);
     Overlay.setLiveSign("me", d.id);
   }
 
@@ -286,7 +284,6 @@ export class BattleScene extends Phaser.Scene {
     Overlay.hideSealGuide();
     Overlay.hideSkillPanel();
     Overlay.hideSkillTest();
-    Overlay.hideSealNow();
     Overlay.hideSealHud();
     Overlay.hideLog();
   }

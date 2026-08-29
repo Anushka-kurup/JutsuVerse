@@ -77,7 +77,7 @@ export const SKILLS: SkillDef[] = [
     id: "shield",
     name: "Shield",
     nameJa: "SHIELD",
-    seals: ["gassho", "snake"], // hold 巳 Snake to keep the shield up
+    seals: ["gassho"],
     action: "SHIELD",
     element: null,
     level: null,

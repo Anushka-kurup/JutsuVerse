@@ -21,7 +21,6 @@ class OverlayController {
   private skillPanel!: HTMLElement;
   private skillCast!: HTMLElement;
   private skillTest!: HTMLElement;
-  private sealNow!: HTMLElement;
   private skillCastTimer = 0;
   private debugEl!: HTMLElement;
   private sealGuide!: HTMLElement;
@@ -73,11 +72,6 @@ class OverlayController {
         </div>
         <div id="skill-cast" hidden></div>
         <div id="skill-test" hidden></div>
-        <div id="seal-now" hidden>
-          <span class="seal-now-label">DETECTED</span>
-          <span class="seal-now-img"></span>
-          <span class="seal-now-name">—</span>
-        </div>
         <pre id="detect-debug" hidden></pre>
         <div id="battle-log" hidden></div>
         <div id="seal-guide" hidden>
@@ -101,7 +95,6 @@ class OverlayController {
     this.skillPanel = this.app.querySelector("#skill-dock")!;
     this.skillCast = this.app.querySelector("#skill-cast")!;
     this.skillTest = this.app.querySelector("#skill-test")!;
-    this.sealNow = this.app.querySelector("#seal-now")!;
     this.debugEl = this.app.querySelector("#detect-debug")!;
     this.sealGuide = this.app.querySelector("#seal-guide")!;
     this.logEl = this.app.querySelector("#battle-log")!;
@@ -381,25 +374,6 @@ class OverlayController {
   }
   get debugVisible(): boolean {
     return !this.debugEl.hidden;
-  }
-
-  // ── big "currently detected" seal box — shows the existing seal PNG, enlarged ──
-  showSealNow(): void {
-    this.sealNow.hidden = false;
-    this.setSealNow(null, 0);
-  }
-  hideSealNow(): void {
-    this.sealNow.hidden = true;
-  }
-  setSealNow(id: string | null, score: number): void {
-    const s = id ? signById(id) : undefined;
-    this.sealNow.querySelector(".seal-now-img")!.innerHTML = s
-      ? sealHtml(id!, "seal-cell--now")
-      : `<span class="seal-cell seal-cell--now seal-cell--empty"><b>—</b></span>`;
-    this.sealNow.querySelector(".seal-now-name")!.textContent = s
-      ? `${s.en} · ${s.kanji}   ${Math.round(score * 100)}%`
-      : "—";
-    this.sealNow.classList.toggle("on", Boolean(s));
   }
 
   // ── rolling battle log ──
