@@ -24,6 +24,10 @@ export const Events = {
   SEAL_BUFFER: "seal-buffer", // (ids: string[]) — my seals still in the server's window
   MY_HELD: "my-held", // (id: string | null) — the sign I'm currently forming
 
+  // ── 6-7 contest (MediaPipe rep counter, replaces seal input while it runs) ──
+  SIXSEVEN_REPS: "sixseven-reps", // (reps: number) — my local count changed
+  SIXSEVEN_SIGNAL: "sixseven-signal", // ({ d, valid, pose }) — live detector feedback
+
   // ── network module ──
   NET_OPEN: "net-open",
   NET_JOINED: "net-joined", // ({ code: string, seat: Seat, peerPresent: boolean })

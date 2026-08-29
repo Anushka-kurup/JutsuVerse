@@ -1,5 +1,5 @@
 import { TICK_MS, type ServerMsg } from "@jutsu/protocol";
-import { countdownValue, publicState, tickMatch } from "./match.ts";
+import { matchStatePublic, publicState, tickMatch } from "./match.ts";
 import { allPlayers, liveRooms } from "./rooms.ts";
 
 export function startLoop(): NodeJS.Timeout {
@@ -9,14 +9,7 @@ export function startLoop(): NodeJS.Timeout {
       const snap = publicState(room.match);
       const stateMsg: ServerMsg = { type: "state", ...snap };
       const payload = JSON.stringify(stateMsg);
-      const matchMsg: ServerMsg = {
-        type: "match_state",
-        phase: room.match.phase,
-        winner: room.match.winner,
-        cam: room.match.cam,
-        ready: room.match.ready,
-        countdown: countdownValue(room.match),
-      };
+      const matchMsg: ServerMsg = matchStatePublic(room.match);
       const matchPayload = JSON.stringify(matchMsg);
       for (const p of room.players.values()) {
         if (p.ws.readyState === p.ws.OPEN) {

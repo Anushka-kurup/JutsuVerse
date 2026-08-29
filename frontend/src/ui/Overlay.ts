@@ -1,5 +1,6 @@
 import { bus, Events } from "../core/EventBus";
 import { session } from "../core/Session";
+import type { SpecialView } from "../network/NetworkClient";
 import { HAND_SIGNS, SEAL_IDS, signById, SKILLS, skillById, type Side } from "../types";
 import { sealHtml, sealTextHtml } from "./sealVisual";
 
@@ -16,7 +17,11 @@ class OverlayController {
   private lobby!: HTMLElement;
   private prep!: HTMLElement;
   private startGate!: HTMLElement;
+  private overlayEl!: HTMLElement;
   private camMount!: HTMLElement;
+  private contest!: HTMLElement;
+  private contestSides: Record<Side, { reps: HTMLElement; bar: HTMLElement }> = {} as never;
+  private contestRepsShown: Record<Side, number> = { me: -1, opp: -1 };
   private sealHud!: HTMLElement;
   private skillPanel!: HTMLElement;
   private skillCast!: HTMLElement;
@@ -62,6 +67,19 @@ class OverlayController {
           <p class="startgate-status"></p>
         </div>
         <div id="cam-mount"></div>
+        <div id="contest" hidden>
+          <p class="contest-title">六七 · 6-7 CONTEST</p>
+          <p class="contest-hint">
+            Alternate your hands high and low. First to <b>67</b> takes <b>+10 HP</b>.
+          </p>
+          <div class="contest-scores">
+            ${this.contestSideHtml("me", "YOU")}
+            ${this.contestSideHtml("opp", "OPPONENT")}
+          </div>
+          <p class="contest-clock">—</p>
+          <p class="contest-status"></p>
+          <p class="contest-result" hidden></p>
+        </div>
         <div id="seal-hud" hidden>
           ${this.rowHtml("opp", "OPPONENT")}
           ${this.rowHtml("me", "YOU")}
@@ -90,7 +108,16 @@ class OverlayController {
     this.lobby = this.app.querySelector("#lobby")!;
     this.prep = this.app.querySelector("#prep")!;
     this.startGate = this.app.querySelector("#startgate")!;
+    this.overlayEl = this.app.querySelector("#overlay")!;
     this.camMount = this.app.querySelector("#cam-mount")!;
+    this.contest = this.app.querySelector("#contest")!;
+    for (const side of ["me", "opp"] as Side[]) {
+      const el = this.contest.querySelector(`.contest-side[data-side="${side}"]`)!;
+      this.contestSides[side] = {
+        reps: el.querySelector(".contest-reps")!,
+        bar: el.querySelector(".contest-bar > i")!,
+      };
+    }
     this.sealHud = this.app.querySelector("#seal-hud")!;
     this.skillPanel = this.app.querySelector("#skill-dock")!;
     this.skillCast = this.app.querySelector("#skill-cast")!;
@@ -192,6 +219,83 @@ class OverlayController {
   }
   hideStartGate(): void {
     this.startGate.hidden = true;
+  }
+
+  private contestSideHtml(side: Side, label: string): string {
+    return `<div class="contest-side" data-side="${side}">
+      <span class="contest-who">${label}</span>
+      <span class="contest-reps">0</span>
+      <div class="contest-bar"><i></i></div>
+    </div>`;
+  }
+
+  // ── 6-7 contest ──
+  /** Contest mode hides the seal furniture; the gesture is nothing like a seal. */
+  showContest(): void {
+    this.contest.hidden = false;
+    this.setContestMode(true);
+    this.contestRepsShown = { me: -1, opp: -1 };
+    this.setContestStatus("");
+    const result = this.contest.querySelector<HTMLElement>(".contest-result")!;
+    result.hidden = true;
+    result.textContent = "";
+  }
+
+  hideContest(): void {
+    this.contest.hidden = true;
+    this.setContestMode(false);
+  }
+
+  /**
+   * Seal furniture stays hidden only while combat is actually frozen. The result
+   * banner outlives that, and by then the player can cast again — so they need
+   * the jutsu dock back even though the panel is still up.
+   */
+  setContestMode(on: boolean): void {
+    this.overlayEl.classList.toggle("contest-mode", on);
+  }
+
+  setContest(v: SpecialView): void {
+    for (const side of ["me", "opp"] as Side[]) {
+      const value = v.reps[side];
+      const w = this.contestSides[side];
+      if (value !== this.contestRepsShown[side]) {
+        this.contestRepsShown[side] = value;
+        w.reps.textContent = String(value);
+        // a number that only changes value reads as broken even when it is right
+        w.reps.classList.remove("pop");
+        void w.reps.offsetWidth; // restart the animation
+        w.reps.classList.add("pop");
+      }
+      w.bar.style.width = `${Math.min(100, (value / v.target) * 100)}%`;
+      w.bar.classList.toggle("done", value >= v.target);
+    }
+
+    const clock = this.contest.querySelector<HTMLElement>(".contest-clock")!;
+    clock.textContent = v.outcome ? "" : `${v.secondsLeft}s`;
+    clock.classList.toggle("urgent", !v.outcome && v.secondsLeft <= 10);
+
+    const result = this.contest.querySelector<HTMLElement>(".contest-result")!;
+    result.hidden = v.outcome === null;
+    if (v.outcome) {
+      this.setContestStatus("");
+      result.textContent = contestResultText(v);
+      result.className = `contest-result contest-result--${v.outcome}`;
+    }
+  }
+
+  /** Live detector feedback — without it a player cannot tell why nothing counts. */
+  setContestSignal(valid: boolean): void {
+    if (this.contest.hidden) return;
+    if (this.contest.querySelector<HTMLElement>(".contest-result")!.hidden) {
+      this.setContestStatus(valid ? "" : "Show BOTH hands to the camera");
+    }
+  }
+
+  setContestStatus(text: string): void {
+    const el = this.contest.querySelector<HTMLElement>(".contest-status")!;
+    el.textContent = text;
+    el.classList.toggle("warn", text !== "");
   }
 
   private rowHtml(side: Side, label: string): string {
@@ -388,6 +492,13 @@ class OverlayController {
     this.logEl.innerHTML = lines.map((l) => `<div>${escapeHtml(l)}</div>`).join("");
     this.logEl.scrollTop = this.logEl.scrollHeight;
   }
+}
+
+function contestResultText(v: SpecialView): string {
+  if (v.outcome === "draw") return "DRAW — no one heals";
+  const who = v.outcome === "me" ? "YOU WIN" : "OPPONENT WINS";
+  // winning at full health is a real outcome, not a bug — say so plainly
+  return v.healed > 0 ? `${who} · +${v.healed} HP` : `${who} · already at full HP`;
 }
 
 function escapeHtml(s: string): string {

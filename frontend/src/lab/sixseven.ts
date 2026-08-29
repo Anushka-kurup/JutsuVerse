@@ -1,7 +1,7 @@
 import "./lab.css";
 import { initTracker, detect, delegate, startCamera, stopCamera, type Hand } from "./tracker";
 import { drawHands, clear, HAND_COLORS } from "./draw";
-import { palmCenter } from "./geometry";
+import { palmCenter, sortForScreen } from "./geometry";
 import { rawSignal, Ema } from "./signal";
 import { HandPairer } from "./pairing";
 import { drawTrace, type TracePoint } from "./trace";
@@ -85,13 +85,6 @@ function set(id: string, value: string, cls = "") {
 
 function pct(n: number, total: number): number {
   return total === 0 ? 0 : Math.round((n / total) * 100);
-}
-
-// Sort hands left-to-right *as seen on screen*. The video is mirrored, so screen
-// x is (1 - landmark x). MediaPipe's own hand order is not stable between frames,
-// and its handedness labels are unreliable on a mirrored feed — position is.
-function sortForScreen(hands: Hand[]): Hand[] {
-  return [...hands].sort((h1, h2) => palmCenter(h2).x - palmCenter(h1).x);
 }
 
 function isClipped(hands: Hand[]): boolean {

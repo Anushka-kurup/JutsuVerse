@@ -6,11 +6,13 @@ import { Character } from "../entities/Character";
 import { GestureBridge } from "../gesture/GestureBridge";
 import { CameraPreview } from "../gesture/CameraPreview";
 import { SkillMatcher } from "../gesture/SkillMatcher";
+import { SixSevenBridge, type SixSevenSignal } from "../gesture/SixSevenBridge";
 import { Hud } from "../hud/Hud";
 import { EffectsLayer } from "../layers/EffectsLayer";
 import { BackgroundLayer } from "../layers/BackgroundLayer";
 import { StateSync, type NetState } from "../network/StateSync";
 import { VideoCall } from "../network/VideoCall";
+import type { SpecialView } from "../network/NetworkClient";
 import { Overlay } from "../ui/Overlay";
 import { skillById, type Phase, type Seat, type Side } from "../types";
 
@@ -31,6 +33,9 @@ export class BattleScene extends Phaser.Scene {
   private bridge!: GestureBridge;
   private videoCall!: VideoCall;
   private matcher!: SkillMatcher;
+  private sixSeven!: SixSevenBridge;
+  /** true while the 6-7 contest has combat frozen */
+  private inSpecial = false;
 
   /** false until the 3·2·1 countdown finishes — gates all input */
   private started = false;
@@ -49,6 +54,7 @@ export class BattleScene extends Phaser.Scene {
     this.started = false;
     this.camReadied = false;
     this.startPressed = false;
+    this.inSpecial = false;
     this.countdownValue = null;
     new BackgroundLayer(this);
 
@@ -56,6 +62,7 @@ export class BattleScene extends Phaser.Scene {
     this.bridge = new GestureBridge(this.preview.video, this.preview.canvas);
     this.videoCall = new VideoCall(net, this.preview.remoteVideo);
     this.matcher = new SkillMatcher();
+    this.sixSeven = new SixSevenBridge(this.preview.video);
 
     // fixed casting by seat: seat "a" is always char-me (Naruto), seat "b" char-opp (Haku)
     const iAmB = net.mySeat === "b";
@@ -84,6 +91,8 @@ export class BattleScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-G", this.toggleGuide, this);
 
     bus.on(Events.SIGN_LIVE, this.onSignLive, this);
+    bus.on(Events.SIXSEVEN_REPS, this.onReps, this);
+    bus.on(Events.SIXSEVEN_SIGNAL, this.onSixSevenSignal, this);
     bus.on(Events.SEAL_CONFIRMED, this.onSealConfirmed, this);
     bus.on(Events.SEAL_BUFFER, this.onMySeals, this);
     bus.on(Events.SKILL_FIRED, this.onSkillFired, this);
@@ -135,7 +144,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private onSealConfirmed(id: string): void {
-    if (!this.started) return; // input is locked until the countdown finishes
+    if (!this.started || this.inSpecial) return; // locked until the countdown, and during the contest
     net.sendSeal(id); // → server input edge; the server matches & resolves
   }
 
@@ -155,6 +164,43 @@ export class BattleScene extends Phaser.Scene {
     Overlay.setLiveSign("opp", id);
   }
 
+  // ── 6-7 contest ──
+  private onReps(reps: number): void {
+    if (this.inSpecial) net.sendReps(reps);
+  }
+
+  private onSixSevenSignal(s: SixSevenSignal): void {
+    if (this.inSpecial) Overlay.setContestSignal(s.valid);
+  }
+
+  /** Swap the seal detector out for the rep detector — both read the same camera. */
+  private enterSpecial(): void {
+    if (this.inSpecial) return;
+    this.inSpecial = true;
+    this.matcher.reset();
+    net.setHeldSign(null);
+    this.bridge.pauseDetection();
+    Overlay.showContest();
+
+    if (!this.bridge.active) {
+      Overlay.setContestStatus("Camera is off — turn it on to compete");
+      return;
+    }
+    this.sixSeven.start().catch((err) => {
+      console.error("[6-7]", err);
+      Overlay.setContestStatus("Hand tracking failed to start");
+    });
+  }
+
+  private exitSpecial(): void {
+    if (!this.inSpecial) return;
+    this.inSpecial = false;
+    this.sixSeven.stop();
+    this.bridge.resumeDetection();
+    // the result banner stays up, but combat has resumed — give the dock back
+    Overlay.setContestMode(false);
+  }
+
   private async toggleCamera(): Promise<void> {
     if (this.bridge.active) {
       net.setHeldSign(null);
@@ -169,6 +215,8 @@ export class BattleScene extends Phaser.Scene {
       const stream = await this.bridge.start();
       this.videoCall.setLocalStream(stream);
       this.preview.setEnabled(true);
+      // warm the 6-7 landmark model now; the contest starts with no warning
+      void this.sixSeven.preload().catch((err) => console.error("[6-7] preload", err));
       if (!this.camReadied) {
         this.camReadied = true;
         net.cameraReady(); // gate 1 cleared → the start banner shows once both cameras are on
@@ -188,7 +236,16 @@ export class BattleScene extends Phaser.Scene {
     phase: Phase;
     winner: Seat | "draw" | null;
     countdown?: number | null;
+    special?: SpecialView | null;
   }): void {
+    // Detector swap follows the phase, but the panel follows the `special` block,
+    // which outlives the phase by a few ticks so the result can be read.
+    if (m.phase === "special") this.enterSpecial();
+    else if (this.inSpecial) this.exitSpecial();
+
+    if (m.special) Overlay.setContest(m.special);
+    else Overlay.hideContest();
+
     if (m.phase === "connecting") {
       // gate 1 done (both cameras on) → gate 2: both players press START
       Overlay.hidePrep();
@@ -213,6 +270,7 @@ export class BattleScene extends Phaser.Scene {
       this.started = false;
       this.startPressed = false;
       this.matcher.reset();
+      Overlay.hideContest();
       const iWon = m.winner !== "draw" && m.winner === net.mySeat;
       this.scene.launch("Result", { winner: m.winner ?? "draw", iWon });
     }
@@ -258,6 +316,8 @@ export class BattleScene extends Phaser.Scene {
 
   private teardown(): void {
     bus.off(Events.SIGN_LIVE, this.onSignLive, this);
+    bus.off(Events.SIXSEVEN_REPS, this.onReps, this);
+    bus.off(Events.SIXSEVEN_SIGNAL, this.onSixSevenSignal, this);
     bus.off(Events.SEAL_CONFIRMED, this.onSealConfirmed, this);
     bus.off(Events.SEAL_BUFFER, this.onMySeals, this);
     bus.off(Events.SKILL_FIRED, this.onSkillFired, this);
@@ -270,6 +330,7 @@ export class BattleScene extends Phaser.Scene {
     this.input.keyboard?.off("keydown-D", this.toggleDebug, this);
     this.input.keyboard?.off("keydown-G", this.toggleGuide, this);
 
+    this.sixSeven.stop();
     this.bridge.stop();
     this.countdownLabel?.destroy();
     this.videoCall.destroy();
@@ -279,6 +340,7 @@ export class BattleScene extends Phaser.Scene {
     this.fx.clear();
 
     Overlay.setDebug(null);
+    Overlay.hideContest();
     Overlay.hidePrep();
     Overlay.hideStartGate();
     Overlay.hideSealGuide();
