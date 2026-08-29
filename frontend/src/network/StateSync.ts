@@ -4,7 +4,7 @@ import { SPAWN } from "../core/GameConfig";
 import type { Character } from "../entities/Character";
 import type { EffectsLayer } from "../layers/EffectsLayer";
 import type { Hud } from "../hud/Hud";
-import { skillById, type FighterPublic, type Side } from "../types";
+import { skillById, skillForPrefix, type FighterPublic, type Side } from "../types";
 
 const CHEST_DY = 160; // torso height above the feet — projectile spawn / land
 
@@ -44,26 +44,19 @@ export class StateSync {
     this.me.setDefense(me.stance === "block" ? "PROTECT" : null);
     this.opp.setDefense(opp.stance === "block" ? "PROTECT" : null);
 
-    // ── seal buffers → overlay ──
-    const myKey = me.buffer.join(",");
-    if (myKey !== this.mySealsKey) {
-      this.mySealsKey = myKey;
-      bus.emit(Events.SEAL_BUFFER, [...me.buffer]);
-    }
-    const oppKey = opp.buffer.join(",");
-    if (oppKey !== this.oppSealsKey) {
-      this.oppSealsKey = oppKey;
-      bus.emit(Events.OPP_SEALS, [...opp.buffer]);
-    }
-    bus.emit(Events.OPP_SIGN, opp.held[opp.held.length - 1] ?? null);
-
-    // ── skill fired (server set lastSkillTick this frame) ──
+    // ── skill fired (server set lastSkillTick this frame) — run before the seal
+    //    diff so a firing charge gets a release flare, not a dismiss ──
     if (me.lastSkill && (!prev || me.lastSkillTick > prev.me.lastSkillTick)) {
       this.playSkill("me", me.lastSkill);
     }
     if (opp.lastSkill && (!prev || opp.lastSkillTick > prev.opp.lastSkillTick)) {
       this.playSkill("opp", opp.lastSkill);
     }
+
+    // ── seal buffers → overlay strip + the charging-jutsu visual ──
+    this.syncSeals("me", me.buffer);
+    this.syncSeals("opp", opp.buffer);
+    bus.emit(Events.OPP_SIGN, opp.held[opp.held.length - 1] ?? null);
 
     // ── hits ──
     if (prev && me.hp < prev.me.hp) {
@@ -78,12 +71,46 @@ export class StateSync {
     // ── KO / revive ──
     const meDead = me.hp <= 0;
     const oppDead = opp.hp <= 0;
-    if (meDead && (!prev || prev.me.hp > 0)) this.me.ko();
-    if (oppDead && (!prev || prev.opp.hp > 0)) this.opp.ko();
+    if (meDead && (!prev || prev.me.hp > 0)) {
+      this.me.ko();
+      this.fx.clearCharge("me");
+    }
+    if (oppDead && (!prev || prev.opp.hp > 0)) {
+      this.opp.ko();
+      this.fx.clearCharge("opp");
+    }
     if (!meDead && prev && prev.me.hp <= 0) this.me.revive();
     if (!oppDead && prev && prev.opp.hp <= 0) this.opp.revive();
 
     this.prev = s;
+  }
+
+  /** Buffer changed → update the HUD strip and the growing charge orb. */
+  private syncSeals(side: Side, buffer: string[]): void {
+    const key = buffer.join(",");
+    if (side === "me") {
+      if (key === this.mySealsKey) return;
+      this.mySealsKey = key;
+      bus.emit(Events.SEAL_BUFFER, [...buffer]);
+    } else {
+      if (key === this.oppSealsKey) return;
+      this.oppSealsKey = key;
+      bus.emit(Events.OPP_SEALS, [...buffer]);
+    }
+
+    const skill = skillForPrefix(buffer);
+    if (skill?.action === "ATTACK" && skill.element && buffer.length >= 1) {
+      const at = side === "me" ? SPAWN.me : SPAWN.opp;
+      const facing: 1 | -1 = side === "me" ? 1 : -1;
+      this.fx.charge(
+        side,
+        { x: at.x, y: at.y - CHEST_DY, element: skill.element, skillId: skill.id, facing },
+        buffer.length,
+        skill.seals.length,
+      );
+    } else {
+      this.fx.clearCharge(side);
+    }
   }
 
   private playSkill(side: Side, skillId: string): void {
@@ -96,6 +123,7 @@ export class StateSync {
       // flight and its tail lands on the hit
       sfx.play(skill.element.toLowerCase());
       char.cast(skill.element);
+      this.fx.releaseCharge(side);
       const from = side === "me" ? SPAWN.me : SPAWN.opp;
       const to = side === "me" ? SPAWN.opp : SPAWN.me;
       const level = skill.level ?? 1;
@@ -112,6 +140,7 @@ export class StateSync {
         level, // level 1/2 → 1/2 projectiles
       );
     } else {
+      this.fx.clearCharge(side);
       char.pulseDefense("PROTECT");
       char.cast("NEUTRAL");
     }
