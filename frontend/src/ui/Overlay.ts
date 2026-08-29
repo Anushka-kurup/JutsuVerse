@@ -1,0 +1,352 @@
+import { bus, Events } from "../core/EventBus";
+import { session } from "../core/Session";
+import { HAND_SIGNS, SEAL_IDS, signById, SKILLS, skillById, type Side } from "../types";
+import { sealHtml, sealTextHtml, skillHtml } from "./sealVisual";
+
+/**
+ * The DOM layer above the Phaser canvas. Phaser can't host <input>/<video>/<img>,
+ * so the connect form, camera-preview mount, on-screen seal pad, the seal HUD
+ * (both players' in-progress sequences + skill flashes, as images with kanji
+ * fallback) and the rolling log all live here. Scenes drive it via this API.
+ */
+class OverlayController {
+  private app!: HTMLElement;
+  private menu!: HTMLElement;
+  private menuError!: HTMLElement;
+  private lobby!: HTMLElement;
+  private camMount!: HTMLElement;
+  private sealPad!: HTMLElement;
+  private sealHud!: HTMLElement;
+  private skillPanel!: HTMLElement;
+  private skillCast!: HTMLElement;
+  private skillCastTimer = 0;
+  private debugEl!: HTMLElement;
+  private sealGuide!: HTMLElement;
+  private logEl!: HTMLElement;
+  private rows: Record<Side, { seals: HTMLElement; live: HTMLElement; flash: HTMLElement }> = {} as never;
+
+  mount(): void {
+    this.app = document.querySelector<HTMLElement>("#app")!;
+    this.app.innerHTML = `
+      <div id="stage"></div>
+      <div id="overlay">
+        <form id="menu" autocomplete="off">
+          <h1>忍 JUTSUVERSE</h1>
+          <p class="tagline">Form the seals. The server referees.</p>
+          <label>Server <input name="server" value="${session.server}" /></label>
+          <label>Your name <input name="player" value="${session.player}" /></label>
+          <button type="submit" data-act="create">Create room</button>
+          <div class="menu-or">— or —</div>
+          <label>Room code <input name="room" value="" placeholder="ABCDEF" maxlength="8" /></label>
+          <button type="button" data-act="join">Join room</button>
+          <div class="menu-error"></div>
+          <div class="jutsu-key">${this.jutsuKeyHtml()}</div>
+        </form>
+        <div id="lobby" hidden>
+          <h1>忍 JUTSUVERSE</h1>
+          <p class="lobby-label">ROOM CODE</p>
+          <p class="lobby-code">······</p>
+          <p class="lobby-status">Creating room…</p>
+          <button type="button" class="lobby-cancel">Cancel</button>
+        </div>
+        <div id="cam-mount"></div>
+        <div id="seal-hud" hidden>
+          ${this.rowHtml("opp", "OPPONENT")}
+          ${this.rowHtml("me", "YOU")}
+        </div>
+        <div id="skill-dock" hidden>
+          <span class="dock-title">忍術<br>JUTSU</span>
+          <div class="dock-row">${this.skillPanelHtml()}</div>
+        </div>
+        <div id="seal-pad" hidden></div>
+        <div id="skill-cast" hidden></div>
+        <pre id="detect-debug" hidden></pre>
+        <div id="battle-log" hidden></div>
+        <div id="seal-guide" hidden>
+          <div class="seal-guide-card">
+            <h3>結印 SEAL GUIDE <button type="button" class="seal-guide-close">✕</button></h3>
+            <div class="seal-guide-grid">${this.sealGuideHtml()}</div>
+            <p class="seal-guide-note">Form these with your hands to the camera. Add photos at
+              <code>public/assets/seals/&lt;id&gt;.png</code> — press <b>G</b> to toggle.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.menu = this.app.querySelector("#menu")!;
+    this.menuError = this.app.querySelector(".menu-error")!;
+    this.lobby = this.app.querySelector("#lobby")!;
+    this.camMount = this.app.querySelector("#cam-mount")!;
+    this.sealPad = this.app.querySelector("#seal-pad")!;
+    this.sealHud = this.app.querySelector("#seal-hud")!;
+    this.skillPanel = this.app.querySelector("#skill-dock")!;
+    this.skillCast = this.app.querySelector("#skill-cast")!;
+    this.debugEl = this.app.querySelector("#detect-debug")!;
+    this.sealGuide = this.app.querySelector("#seal-guide")!;
+    this.logEl = this.app.querySelector("#battle-log")!;
+
+    this.sealGuide.addEventListener("click", (e) => {
+      if (e.target === this.sealGuide || (e.target as HTMLElement).closest(".seal-guide-close")) {
+        this.hideSealGuide();
+      }
+    });
+
+    for (const side of ["me", "opp"] as Side[]) {
+      const row = this.sealHud.querySelector(`.seal-row[data-side="${side}"]`)!;
+      this.rows[side] = {
+        seals: row.querySelector(".seal-strip")!,
+        live: row.querySelector(".seal-live")!,
+        flash: row.querySelector(".seal-flash")!,
+      };
+    }
+
+    const go = (room: string): void => {
+      const data = new FormData(this.menu as HTMLFormElement);
+      const opts = {
+        server: String(data.get("server") ?? "").trim(),
+        room,
+        player: String(data.get("player") ?? "").trim() || "Ronin",
+      };
+      if (!opts.server) return;
+      Object.assign(session, opts);
+      this.setMenuError("");
+      bus.emit(Events.CONNECT_REQUEST, opts);
+    };
+
+    this.menu.addEventListener("submit", (e) => {
+      e.preventDefault(); // "Create room" — no code, server allocates one
+      go("");
+    });
+    this.menu.querySelector<HTMLButtonElement>('[data-act="join"]')!.addEventListener("click", () => {
+      const code = this.menu.querySelector<HTMLInputElement>('input[name="room"]')!.value.trim();
+      if (!code) {
+        this.setMenuError("enter a room code to join");
+        return;
+      }
+      go(code);
+    });
+    this.lobby.querySelector<HTMLButtonElement>(".lobby-cancel")!.addEventListener("click", () => {
+      bus.emit(Events.RESET_REQUEST, "cancel");
+    });
+  }
+
+  showLobby(code: string, peerPresent: boolean): void {
+    this.menu.hidden = true;
+    this.lobby.hidden = false;
+    this.lobby.querySelector(".lobby-code")!.textContent = code || "······";
+    this.setLobbyStatus(
+      peerPresent ? "Opponent found — starting…" : "Waiting for opponent to join…",
+    );
+  }
+  setLobbyStatus(text: string): void {
+    this.lobby.querySelector(".lobby-status")!.textContent = text;
+  }
+  hideLobby(): void {
+    this.lobby.hidden = true;
+  }
+
+  private rowHtml(side: Side, label: string): string {
+    return `<div class="seal-row" data-side="${side}">
+      <span class="seal-row-label">${label}</span>
+      <span class="seal-live"></span>
+      <span class="seal-strip"></span>
+      <span class="seal-flash"></span>
+    </div>`;
+  }
+
+  private jutsuKeyHtml(): string {
+    return SKILLS.map(
+      (s) =>
+        `<div><b>${s.nameJa}</b> <small>${s.name}</small><span>${s.seals
+          .map((id) => signById(id)?.kanji ?? id)
+          .join(" ")}</span></div>`,
+    ).join("");
+  }
+
+  private sealGuideHtml(): string {
+    return SEAL_IDS.map((id) => {
+      const s = HAND_SIGNS.find((x) => x.id === id)!;
+      return `<figure class="seal-guide-cell">
+        ${sealHtml(id, "seal-cell--guide")}
+        <figcaption>${s.en}<span>${s.kanji}</span></figcaption>
+      </figure>`;
+    }).join("");
+  }
+
+  private skillPanelHtml(): string {
+    return SKILLS.map((s) => {
+      const tag = s.action === "ATTACK" ? (s.element ?? "ATK") : s.action;
+      return `<div class="skill-line" data-skill="${s.id}">
+        <div class="skill-head">
+          <span class="skill-name"><b>${s.nameJa}</b><small>${s.name}</small></span>
+          <span class="skill-tag skill-tag--${s.action.toLowerCase()}">${tag}</span>
+        </div>
+        <div class="skill-seals">${s.seals.map((id) => sealHtml(id, "skill-seal")).join("")}</div>
+      </div>`;
+    }).join("");
+  }
+
+  get stageEl(): HTMLElement {
+    return this.app.querySelector("#stage")!;
+  }
+  get cameraRoot(): HTMLElement {
+    return this.camMount;
+  }
+
+  // ── menu ──
+  showMenu(): void {
+    this.menu.hidden = false;
+    this.lobby.hidden = true;
+  }
+  hideMenu(): void {
+    this.menu.hidden = true;
+  }
+  setMenuError(msg: string): void {
+    this.menuError.textContent = msg;
+  }
+
+  // ── seal HUD ──
+  showSealHud(): void {
+    this.sealHud.hidden = false;
+    this.setSeals("me", []);
+    this.setSeals("opp", []);
+    this.setLiveSign("me", "none");
+    this.setLiveSign("opp", "none");
+  }
+  hideSealHud(): void {
+    this.sealHud.hidden = true;
+  }
+
+  setSeals(side: Side, ids: string[]): void {
+    // both HUD strips are kanji-only; photos live in the Seal Guide (press G)
+    this.rows[side].seals.innerHTML = ids.map((id) => sealTextHtml(id)).join("");
+  }
+
+  setLiveSign(side: Side, id: string): void {
+    const known = id && id !== "none" && Boolean(signById(id));
+    this.rows[side].live.innerHTML = known ? sealTextHtml(id, "seal-cell--live") : "";
+  }
+
+  /** a skill was cast → big centre banner with its image for 3 seconds */
+  flashSkill(side: Side, skillId: string): void {
+    if (!skillById(skillId)) return;
+    const who = side === "me" ? "YOU" : "OPPONENT";
+    this.skillCast.innerHTML = `<span class="skill-cast-who skill-cast-who--${side}">${who}</span>${skillHtml(skillId)}`;
+    this.skillCast.hidden = false;
+    // force reflow so the .on transition replays on rapid re-casts
+    void this.skillCast.offsetWidth;
+    this.skillCast.classList.add("on");
+    window.clearTimeout(this.skillCastTimer);
+    this.skillCastTimer = window.setTimeout(() => {
+      this.skillCast.classList.remove("on");
+      this.skillCast.hidden = true;
+      this.skillCast.innerHTML = "";
+    }, 3000);
+
+    if (side === "me") {
+      const row = this.skillPanel.querySelector(`.skill-line[data-skill="${skillId}"]`);
+      row?.classList.add("fired");
+      window.setTimeout(() => row?.classList.remove("fired"), 900);
+    }
+  }
+
+  // ── skill panel (the jutsu list, always visible in battle) ──
+  showSkillPanel(): void {
+    this.skillPanel.hidden = false;
+    this.highlightSkills([]);
+  }
+  hideSkillPanel(): void {
+    this.skillPanel.hidden = true;
+    window.clearTimeout(this.skillCastTimer);
+    this.skillCast.hidden = true;
+    this.skillCast.innerHTML = "";
+  }
+
+  /** light up how far the current seal buffer has progressed into each jutsu */
+  highlightSkills(buffer: string[]): void {
+    for (const line of this.skillPanel.querySelectorAll<HTMLElement>(".skill-line")) {
+      const skill = skillById(line.dataset.skill ?? "");
+      if (!skill) continue;
+      let matched = 0;
+      for (let k = Math.min(buffer.length, skill.seals.length); k > 0; k--) {
+        if (eq(buffer.slice(-k), skill.seals.slice(0, k))) {
+          matched = k;
+          break;
+        }
+      }
+      line.classList.toggle("armed", matched > 0);
+      line.querySelectorAll(".skill-seal").forEach((m, i) => m.classList.toggle("hit", i < matched));
+    }
+  }
+
+  // ── seal guide (how to form each seal; toggle with G) ──
+  showSealGuide(): void {
+    this.sealGuide.hidden = false;
+  }
+  hideSealGuide(): void {
+    this.sealGuide.hidden = true;
+  }
+  toggleSealGuide(): void {
+    this.sealGuide.hidden = !this.sealGuide.hidden;
+  }
+
+  // ── detector debug (toggle with D) ──
+  setDebug(text: string | null): void {
+    if (text === null) {
+      this.debugEl.hidden = true;
+      return;
+    }
+    this.debugEl.hidden = false;
+    this.debugEl.textContent = text;
+  }
+  get debugVisible(): boolean {
+    return !this.debugEl.hidden;
+  }
+
+  // ── on-screen seal pad (camera fallback / assist) ──
+  showSealPad(onSeal: (id: string) => void): void {
+    this.sealPad.hidden = false;
+    this.sealPad.innerHTML = "";
+    for (const id of SEAL_IDS) {
+      const sign = HAND_SIGNS.find((s) => s.id === id)!;
+      const btn = document.createElement("button");
+      btn.className = "seal-btn";
+      btn.type = "button";
+      btn.innerHTML = `<b>${sign.kanji}</b><small>${sign.en}</small>`;
+      btn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        btn.classList.add("tapped");
+        onSeal(id);
+        window.setTimeout(() => btn.classList.remove("tapped"), 150);
+      });
+      this.sealPad.appendChild(btn);
+    }
+  }
+  hideSealPad(): void {
+    this.sealPad.hidden = true;
+    this.sealPad.innerHTML = "";
+  }
+
+  // ── rolling battle log ──
+  showLog(): void {
+    this.logEl.hidden = false;
+  }
+  hideLog(): void {
+    this.logEl.hidden = true;
+    this.logEl.innerHTML = "";
+  }
+  setLog(lines: string[]): void {
+    this.logEl.innerHTML = lines.map((l) => `<div>${escapeHtml(l)}</div>`).join("");
+    this.logEl.scrollTop = this.logEl.scrollHeight;
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
+}
+
+function eq(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+export const Overlay = new OverlayController();

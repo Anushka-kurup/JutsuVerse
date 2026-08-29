@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "devDependencies": {
@@ -13,8 +14,10 @@
     "vite": "^5.4.0"
   },
   "dependencies": {
+    "@jutsu/protocol": "*",
     "@mediapipe/tasks-vision": "^1.0.1",
     "onnxruntime-web": "^1.29.0",
-    "socket.io-client": "^4.8.3"
+    "phaser": "^3.90.0",
+    "zod": "^3.24.2"
   }
 }
