@@ -81,9 +81,9 @@ function repsMsg(seq: number, reps: number) {
 test("defines all elemental levels with the requested damage", () => {
   assert.equal(ATTACKS.length, 6);
   const bases = {
-    fire: ["rat", "ox", "tiger"],
-    earth: ["horse", "ram", "monkey"],
-    water: ["bird", "dog", "boar"],
+    fire: ["ox", "hare", "rat"],
+    earth: ["dragon", "tiger", "dog"],
+    water: ["ram", "monkey", "snake"],
   } as const;
   for (const element of ["fire", "earth", "water"] as const) {
     assert.equal(attackById(`${element}_1`)?.damage, 1);
@@ -243,28 +243,27 @@ test("a fighter can raise shield only three times", () => {
   assert.equal(fighter.shields, 0);
 });
 
-test("seal buffer ignores consecutive duplicates and stores at most five", () => {
+test("seal buffer dedups, drops dead seals, and caps at the longest sequence", () => {
   let fighter = createMatch().fighters.a;
-  fighter = applyEdge(fighter, "rat", "down", 1);
-  fighter = applyEdge(fighter, "rat", "down", 2);
-  assert.deepEqual(fighter.buffer.map((event) => event.sign), ["rat"]);
+  const push = (sign: Parameters<typeof applyEdge>[1], tick: number) => {
+    fighter = applyEdge(fighter, sign, "down", tick);
+  };
+  const buf = () => fighter.buffer.map((event) => event.sign);
 
-  for (const [index, sign] of [
-    "ox",
-    "tiger",
-    "hare",
-    "dragon",
-    "snake",
-  ].entries()) {
-    fighter = applyEdge(fighter, sign as Parameters<typeof applyEdge>[1], "down", index + 3);
-  }
-  assert.deepEqual(fighter.buffer.map((event) => event.sign), [
-    "ox",
-    "tiger",
-    "hare",
-    "dragon",
-    "snake",
-  ]);
+  push("ox", 1);
+  push("ox", 2); // consecutive duplicate — ignored
+  assert.deepEqual(buf(), ["ox"]);
+
+  push("hare", 3);
+  push("rat", 4);
+  push("boar", 5); // ox·hare·rat·boar = fire_2, the longest sequence
+  assert.deepEqual(buf(), ["ox", "hare", "rat", "boar"]);
+
+  push("dragon", 6); // ...·dragon starts no jutsu → the whole buffer dies,
+  assert.deepEqual(buf(), ["dragon"]); //   and dragon (an EARTH starter) begins fresh
+
+  push("dog", 7); // dragon·dog is not how EARTH starts (dragon·tiger·dog) → dropped
+  assert.deepEqual(buf(), []);
 });
 
 test("server owns 3, 2, 1, 0 countdown", () => {

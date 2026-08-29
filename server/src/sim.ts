@@ -14,16 +14,20 @@ import {
   consumeSuffix,
   matchAttack,
   matchesShield,
+  pruneBuffer,
   SHIELD,
   type AttackCommand,
   type BufferEvent,
 } from "./commands.ts";
+import { MAX_SEAL_SEQUENCE } from "../../shared/skills.ts";
 
 /** Seal you must keep held to sustain the shield (last seal of the shield sequence). */
 const SHIELD_HOLD_SIGN: Sign = SHIELD.seq[SHIELD.seq.length - 1];
 
 const BUFFER_TICKS = TICK_HZ * 40;
-const MAX_BUFFERED_SIGNS = 5;
+// pruning keeps the buffer a live skill prefix, so it can never exceed the
+// longest sequence anyway — this is just a hard safety cap.
+const MAX_BUFFERED_SIGNS = MAX_SEAL_SEQUENCE;
 const LEVEL_FINALIZE_TICKS = TICK_HZ;
 const HITSTUN_TICKS = 6;
 
@@ -74,10 +78,8 @@ export function createFighter(): Fighter {
 export function applyEdge(f: Fighter, sign: Sign, edge: Edge, tick: number): Fighter {
   if (edge === "up") return f;
   if (f.buffer[f.buffer.length - 1]?.sign === sign) return f;
-  return {
-    ...f,
-    buffer: [...f.buffer, { sign, tick }].slice(-MAX_BUFFERED_SIGNS),
-  };
+  const grown = pruneBuffer([...f.buffer, { sign, tick }]);
+  return { ...f, buffer: grown.slice(-MAX_BUFFERED_SIGNS) };
 }
 
 /** Live recognized gesture, separate from confirmed sequence input. */

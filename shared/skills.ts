@@ -24,11 +24,11 @@ const DAMAGE: Record<SkillLevel, number> = { 1: 1, 2: 2 };
  *  — that keeps every sequence free of back-to-back duplicates.)
  */
 const BASE: Record<SkillElement, string[]> = {
-  FIRE: ["rat", "ox", "tiger"],
-  EARTH: ["horse", "ram", "monkey"],
-  WATER: ["bird", "dog", "boar"],
+  FIRE: ["ox", "hare", "rat"],
+  EARTH: ["dragon", "tiger", "dog"],
+  WATER: ["ram", "monkey", "snake"],
 };
-const AMP: Record<SkillElement, string> = { FIRE: "dog", EARTH: "dragon", WATER: "tiger" };
+const AMP: Record<SkillElement, string> = { FIRE: "boar", EARTH: "bird", WATER: "horse" };
 
 const attack = (element: SkillElement, level: SkillLevel): SkillDef => {
   const seals = level === 1 ? [...BASE[element]] : [...BASE[element], AMP[element]];
@@ -78,3 +78,17 @@ export const SHIELD_HOLD_SIGN = "snake";
 const BY_ID = new Map(SKILLS.map((s) => [s.id, s]));
 export const skillById = (id: string): SkillDef | undefined => BY_ID.get(id);
 export const MAX_SEAL_SEQUENCE = Math.max(...SKILLS.map((s) => s.seals.length));
+
+/**
+ * The shortest skill whose seal sequence begins with `ids` — i.e. the jutsu the
+ * player is currently forming. Sequences don't overlap, so this is unambiguous
+ * (L1 and its L2 extension share a prefix; the shorter one is returned).
+ */
+export function skillForPrefix(ids: string[]): SkillDef | undefined {
+  if (ids.length === 0) return undefined;
+  return [...SKILLS]
+    .filter(
+      (s) => s.seals.length >= ids.length && ids.every((id, i) => s.seals[i] === id),
+    )
+    .sort((a, b) => a.seals.length - b.seals.length)[0];
+}

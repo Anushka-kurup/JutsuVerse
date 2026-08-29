@@ -462,10 +462,9 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  /* the seal photos have a lot of background around the hands — zoom into the
-     centre so only the hand-seal region shows, trimming the outer part */
-  transform: scale(1.4);
+  /* the cell carries the image's own ~4:3 ratio, so this fills it edge to edge
+     with no crop, no zoom, and no black letterbox */
+  object-fit: fill;
 }
 
 .seal-cell--empty {
@@ -497,6 +496,31 @@ body {
 .seal-row[data-side="opp"] .seal-cell--live {
   border-color: #ff5470;
   box-shadow: 0 0 8px rgba(255, 84, 112, 0.6);
+}
+
+/* seal-strip progress: which jutsu + how far in */
+.seal-strip-name {
+  align-self: center;
+  margin-inline-end: 0.2rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+}
+
+.seal-cell--todo {
+  opacity: 0.3;
+  border-style: dashed;
+}
+
+.seal-row[data-side="me"] .seal-cell--done {
+  border-color: var(--accent);
+  background: rgba(79, 125, 255, 0.24);
+}
+
+.seal-row[data-side="opp"] .seal-cell--done {
+  border-color: #ff5470;
+  background: rgba(255, 84, 112, 0.26);
 }
 
 /* ── skill cast: small toast at the top when a jutsu fires ─────────── */
@@ -613,8 +637,8 @@ body {
   min-height: 200px;
   display: flex;
   align-items: stretch;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 6px 10px;
   border-top: 1px solid var(--line);
   background: rgba(14, 19, 28, 0.97);
 }
@@ -636,18 +660,48 @@ body {
 
 .dock-row {
   flex: 1;
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas:
+    "earth water"
+    "fire  shield";
+  gap: 6px;
 }
 
+.skill-line[data-group="SHIELD"] {
+  grid-area: shield;
+  background: rgba(53, 208, 186, 0.17);
+  border-color: rgba(53, 208, 186, 0.5);
+}
+
+/* element cards tinted with their element colour */
+.skill-line[data-group="FIRE"] {
+  grid-area: fire;
+  background: rgba(255, 112, 67, 0.17);
+  border-color: rgba(255, 112, 67, 0.5);
+}
+.skill-line[data-group="EARTH"] {
+  grid-area: earth;
+  background: rgba(195, 139, 82, 0.19);
+  border-color: rgba(195, 139, 82, 0.55);
+}
+.skill-line[data-group="WATER"] {
+  grid-area: water;
+  background: rgba(53, 167, 255, 0.16);
+  border-color: rgba(53, 167, 255, 0.5);
+}
+
+/* one card per element (+ shield); every seal on one line, no wrap, no scroll bar */
 .skill-line {
-  flex: 1 1 0;
-  min-width: 190px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px;
+  flex-direction: column; /* label on top, gesture images below */
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 11px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(30, 38, 54, 0.7);
@@ -664,6 +718,7 @@ body {
 }
 
 .skill-head {
+  flex: 0 0 auto;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -671,14 +726,9 @@ body {
 }
 
 .skill-name b {
-  font-size: 1rem;
+  font-size: 0.82rem;
   color: var(--ink);
-}
-
-.skill-name small {
-  display: block;
-  font-size: 0.64rem;
-  color: var(--muted);
+  white-space: nowrap;
 }
 
 .skill-tag {
@@ -710,19 +760,49 @@ body {
 }
 
 .skill-seals {
+  flex: 1 1 auto; /* take all the height the card can give */
+  min-width: 0;
+  min-height: 0;
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-content: flex-start;
+  gap: 4px;
+  flex-wrap: nowrap; /* every seal on one line — no wrap, no scroll bar */
+  align-items: center;
+  justify-content: space-evenly;
 }
 
 .skill-seal {
-  width: clamp(48px, 9vh, 76px);
-  height: clamp(48px, 9vh, 76px);
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 100%; /* fill the row height exactly — never overflow / clip at the card edge */
+  max-height: clamp(42px, 12vh, 150px);
+  width: auto;
+  aspect-ratio: 4 / 3; /* match the supplied seal images — no letterbox */
   border-radius: 8px;
   opacity: 0.95;
   filter: brightness(1.28) contrast(1.05) saturate(1.05);
   transition: outline-color 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+/* the seal Level 2 adds — L1 and L2 differ only by this trailing seal */
+.skill-seal--ext {
+  border: 2px dashed var(--accent);
+  overflow: visible; /* let the level badge poke out of the corner */
+}
+
+/* small "L2" tag on the dashed upgrade seal */
+.skill-seal--ext::after {
+  content: "L2";
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.5rem;
+  font-weight: 800;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
 }
 
 .skill-seal.hit {
@@ -859,15 +939,10 @@ body {
 .seal-cell--guide {
   width: 100%;
   height: auto;
-  aspect-ratio: 22 / 14;
+  aspect-ratio: 4 / 3; /* match the supplied seal images — no letterbox */
   border-radius: 10px;
   font-size: 3rem;
   background: #0b0f17;
-}
-
-.seal-cell--guide img {
-  object-fit: cover;
-  transform: scale(1.5);
 }
 
 .seal-guide-cell figcaption {
