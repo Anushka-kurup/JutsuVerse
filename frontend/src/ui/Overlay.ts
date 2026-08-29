@@ -39,7 +39,7 @@ class OverlayController {
           <label>Your name <input name="player" value="${session.player}" maxlength="24" autocomplete="off" /></label>
           <button type="submit" data-act="create">Create room</button>
           <div class="menu-or">— or —</div>
-          <label>Room code <input name="room" value="" placeholder="leave blank to create" maxlength="8" autocomplete="off" spellcheck="false" /></label>
+          <label>Room code <input name="room" value="" placeholder="leave blank to create" maxlength="3" autocomplete="off" spellcheck="false" /></label>
           <button type="button" data-act="join">Join room</button>
           <div class="menu-error"></div>
           <div class="jutsu-key">${this.jutsuKeyHtml()}</div>
@@ -47,7 +47,7 @@ class OverlayController {
         <div id="lobby" hidden>
           <h1>忍 JUTSUVERSE</h1>
           <p class="lobby-label">ROOM CODE</p>
-          <p class="lobby-code">······</p>
+          <p class="lobby-code">···</p>
           <p class="lobby-status">Creating room…</p>
           <button type="button" class="lobby-cancel">Cancel</button>
         </div>
@@ -157,7 +157,7 @@ class OverlayController {
   showLobby(code: string, peerPresent: boolean): void {
     this.menu.hidden = true;
     this.lobby.hidden = false;
-    this.lobby.querySelector(".lobby-code")!.textContent = code || "······";
+    this.lobby.querySelector(".lobby-code")!.textContent = code || "···";
     this.setLobbyStatus(
       peerPresent ? "Opponent found — starting…" : "Waiting for opponent to join…",
     );
