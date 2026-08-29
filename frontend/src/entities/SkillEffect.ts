@@ -34,10 +34,17 @@ export class SkillEffect {
   ) {
     const color = ELEMENT_COLOR[opts.element] ?? 0xffffff;
     const dir = Math.sign(opts.toX - opts.fromX) || 1;
+    // Level 1 flies as a small tight bolt; Level 2 gets a big halo
+    const l2 = opts.level >= 2;
+    const g = l2 ? 1 : 0.4;
 
-    const glow = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(7).setAlpha(0.28);
+    const glow = scene.add
+      .image(opts.fromX, opts.fromY, "disc")
+      .setTint(color)
+      .setScale(l2 ? 11 : 2.4)
+      .setAlpha(l2 ? 0.3 : 0.22);
     glow.setBlendMode(Phaser.BlendModes.ADD);
-    const orb = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(3.6);
+    const orb = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(3.2 * g);
     orb.setBlendMode(Phaser.BlendModes.ADD);
     this.parts.push(glow, orb);
 
@@ -57,9 +64,9 @@ export class SkillEffect {
       speed: { min: 20, max: 90 },
       angle: { min: 160 - dir * 20, max: 200 - dir * 20 },
       lifespan: 420,
-      scale: { start: 2.2, end: 0 },
+      scale: { start: 2.2 * g, end: 0 },
       tint: color,
-      quantity: 3,
+      quantity: opts.level >= 2 ? 3 : 2,
       blendMode: "ADD",
     });
     this.parts.push(trail);

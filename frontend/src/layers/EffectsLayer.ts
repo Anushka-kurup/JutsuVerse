@@ -17,13 +17,15 @@ export class EffectsLayer {
   /** Grow the charge for `side` as its seal sequence progresses. */
   charge(side: Side, opts: ChargeOpts, step: number, total: number): void {
     let c = this.charges[side];
-    if (c && c.skillId !== opts.skillId) {
-      c.dismiss();
+    if (c && c.element !== opts.element) {
+      c.dismiss(); // switched to a different element — start over
       c = undefined;
     }
     if (!c) {
       c = new ChargeEffect(this.scene, opts);
       this.charges[side] = c;
+    } else {
+      c.retarget(opts.skillId, opts.withGlow); // same element, maybe L1 → L2
     }
     c.setProgress(step, total);
   }

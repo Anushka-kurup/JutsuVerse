@@ -4,7 +4,7 @@ import { SPAWN } from "../core/GameConfig";
 import type { Character } from "../entities/Character";
 import type { EffectsLayer } from "../layers/EffectsLayer";
 import type { Hud } from "../hud/Hud";
-import { skillById, skillForPrefix, type FighterPublic, type Side } from "../types";
+import { SKILLS, skillById, skillForPrefix, type FighterPublic, type Side } from "../types";
 
 const CHEST_DY = 160; // torso height above the feet — projectile spawn / land
 
@@ -26,6 +26,8 @@ export class StateSync {
   private prev: NetState | null = null;
   private oppSealsKey = "";
   private mySealsKey = "";
+  private myChargeKey = "";
+  private oppChargeKey = "";
 
   constructor(
     private readonly me: Character,
@@ -56,6 +58,8 @@ export class StateSync {
     // ── seal buffers → overlay strip + the charging-jutsu visual ──
     this.syncSeals("me", me.buffer);
     this.syncSeals("opp", opp.buffer);
+    this.syncCharge("me", me.buffer, me.held[me.held.length - 1] ?? null);
+    this.syncCharge("opp", opp.buffer, opp.held[opp.held.length - 1] ?? null);
     bus.emit(Events.OPP_SIGN, opp.held[opp.held.length - 1] ?? null);
 
     // ── hits ──
@@ -85,7 +89,7 @@ export class StateSync {
     this.prev = s;
   }
 
-  /** Buffer changed → update the HUD strip and the growing charge orb. */
+  /** Buffer changed → update the HUD strip. */
   private syncSeals(side: Side, buffer: string[]): void {
     const key = buffer.join(",");
     if (side === "me") {
@@ -97,27 +101,55 @@ export class StateSync {
       this.oppSealsKey = key;
       bus.emit(Events.OPP_SEALS, [...buffer]);
     }
+  }
 
-    const skill = skillForPrefix(buffer);
-    if (skill?.action === "ATTACK" && skill.element && buffer.length >= 1) {
-      const at = side === "me" ? SPAWN.me : SPAWN.opp;
-      const facing: 1 | -1 = side === "me" ? 1 : -1;
-      this.fx.charge(
-        side,
-        {
-          x: at.x,
-          y: at.y - CHEST_DY,
-          element: skill.element,
-          skillId: skill.id,
-          facing,
-          withGlow: (skill.level ?? 1) >= 2, // the element glow behind is Level 2 only
-        },
-        buffer.length,
-        skill.seals.length,
-      );
+  /**
+   * Drive the charging-jutsu visual from the seal buffer + the live held sign.
+   * The server casts Level 2 the instant its amp seal is confirmed, so the
+   * 4-seal buffer never reaches us — instead, once L1 is complete we upgrade the
+   * charge to its L2 look while the player is *holding* that amp seal.
+   */
+  private syncCharge(side: Side, buffer: string[], held: string | null): void {
+    const cacheKey = `${buffer.join(",")}|${held ?? ""}`;
+    if (side === "me") {
+      if (cacheKey === this.myChargeKey) return;
+      this.myChargeKey = cacheKey;
     } else {
-      this.fx.clearCharge(side);
+      if (cacheKey === this.oppChargeKey) return;
+      this.oppChargeKey = cacheKey;
     }
+
+    let skill = skillForPrefix(buffer);
+    if (!skill || skill.action !== "ATTACK" || !skill.element || buffer.length < 1) {
+      this.fx.clearCharge(side);
+      return;
+    }
+    const element = skill.element;
+
+    let step = buffer.length;
+    if (skill.level === 1 && buffer.length >= skill.seals.length && held) {
+      const l2 = SKILLS.find((s) => s.element === element && s.level === 2);
+      if (l2 && held === l2.seals[l2.seals.length - 1]) {
+        skill = l2; // L1 done + holding the amp seal → charge the L2 form
+        step = l2.seals.length;
+      }
+    }
+
+    const at = side === "me" ? SPAWN.me : SPAWN.opp;
+    const facing: 1 | -1 = side === "me" ? 1 : -1;
+    this.fx.charge(
+      side,
+      {
+        x: at.x,
+        y: at.y - CHEST_DY,
+        element,
+        skillId: skill.id,
+        facing,
+        withGlow: (skill.level ?? 1) >= 2, // the element glow behind is Level 2 only
+      },
+      step,
+      skill.seals.length,
+    );
   }
 
   private playSkill(side: Side, skillId: string): void {
