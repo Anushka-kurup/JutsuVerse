@@ -4,6 +4,7 @@ const ELEMENT_COLOR: Record<string, number> = {
   FIRE: 0xff7043,
   WATER: 0x35a7ff,
   WIND: 0x74e39b,
+  EARTH: 0xc38b52,
 };
 
 export interface ProjectileOpts {
@@ -29,60 +30,68 @@ export class SkillEffect {
     opts: ProjectileOpts,
   ) {
     const color = ELEMENT_COLOR[opts.element] ?? 0xffffff;
+    const dir = Math.sign(opts.toX - opts.fromX) || 1;
 
-    const orb = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(1.6);
+    const glow = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(7).setAlpha(0.28);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    const orb = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(3.6);
     orb.setBlendMode(Phaser.BlendModes.ADD);
-    this.parts.push(orb);
+    this.parts.push(glow, orb);
 
     const trail = scene.add.particles(opts.fromX, opts.fromY, "disc", {
       follow: orb,
-      speed: 0,
-      lifespan: 260,
-      scale: { start: 1.1, end: 0 },
+      speed: { min: 20, max: 90 },
+      angle: { min: 160 - dir * 20, max: 200 - dir * 20 },
+      lifespan: 420,
+      scale: { start: 2.2, end: 0 },
       tint: color,
-      quantity: 2,
+      quantity: 3,
       blendMode: "ADD",
     });
     this.parts.push(trail);
 
-    scene.tweens.add({
-      targets: orb,
-      x: opts.toX,
-      y: opts.toY,
-      duration: 240,
-      ease: "Quad.in",
+    // slight upward arc across the arena
+    const midY = (opts.fromY + opts.toY) / 2 - 46;
+    scene.tweens.chain({
+      targets: [orb, glow],
+      tweens: [
+        { x: (opts.fromX + opts.toX) / 2, y: midY, duration: 230, ease: "Sine.out" },
+        { x: opts.toX, y: opts.toY, duration: 210, ease: "Sine.in" },
+      ],
       onComplete: () => {
         trail.stop();
         this.burst(opts.toX, opts.toY, color);
         orb.destroy();
+        glow.destroy();
+        this.scene.cameras.main.shake(180, 0.009);
         opts.onArrive?.();
-        scene.time.delayedCall(500, () => this.destroy());
+        scene.time.delayedCall(600, () => this.destroy());
       },
     });
   }
 
   private burst(x: number, y: number, color: number): void {
-    const ring = this.scene.add.circle(x, y, 6, color, 0.85).setBlendMode(Phaser.BlendModes.ADD);
+    const ring = this.scene.add.circle(x, y, 10, color, 0.9).setBlendMode(Phaser.BlendModes.ADD);
     this.scene.tweens.add({
       targets: ring,
-      radius: 60,
+      radius: 130,
       alpha: 0,
-      duration: 320,
+      duration: 360,
       ease: "Quad.out",
       onComplete: () => ring.destroy(),
     });
     const spray = this.scene.add.particles(x, y, "disc", {
-      speed: { min: 90, max: 260 },
-      lifespan: 420,
-      scale: { start: 1.2, end: 0 },
+      speed: { min: 120, max: 360 },
+      lifespan: 500,
+      scale: { start: 2, end: 0 },
       tint: color,
-      quantity: 20,
+      quantity: 34,
       blendMode: "ADD",
       emitting: false,
     });
-    spray.explode(20, x, y);
+    spray.explode(34, x, y);
     this.parts.push(spray);
-    this.scene.time.delayedCall(500, () => spray.destroy());
+    this.scene.time.delayedCall(600, () => spray.destroy());
   }
 
   destroy(): void {

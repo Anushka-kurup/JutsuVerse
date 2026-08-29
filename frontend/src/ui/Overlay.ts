@@ -1,7 +1,7 @@
 import { bus, Events } from "../core/EventBus";
 import { session } from "../core/Session";
 import { HAND_SIGNS, SEAL_IDS, signById, SKILLS, skillById, type Side } from "../types";
-import { sealHtml, sealTextHtml, skillHtml } from "./sealVisual";
+import { sealHtml, sealTextHtml } from "./sealVisual";
 
 /**
  * The DOM layer above the Phaser canvas. Phaser can't host <input>/<video>/<img>,
@@ -14,11 +14,13 @@ class OverlayController {
   private menu!: HTMLElement;
   private menuError!: HTMLElement;
   private lobby!: HTMLElement;
+  private prep!: HTMLElement;
   private camMount!: HTMLElement;
-  private sealPad!: HTMLElement;
   private sealHud!: HTMLElement;
   private skillPanel!: HTMLElement;
   private skillCast!: HTMLElement;
+  private skillTest!: HTMLElement;
+  private sealNow!: HTMLElement;
   private skillCastTimer = 0;
   private debugEl!: HTMLElement;
   private sealGuide!: HTMLElement;
@@ -49,6 +51,11 @@ class OverlayController {
           <p class="lobby-status">Creating room…</p>
           <button type="button" class="lobby-cancel">Cancel</button>
         </div>
+        <div id="prep" hidden>
+          <p class="prep-title">結印準備 · GET READY</p>
+          <p class="prep-hint">Enable your camera — the round begins once <b>both</b> players are ready.</p>
+          <p class="prep-status">…</p>
+        </div>
         <div id="cam-mount"></div>
         <div id="seal-hud" hidden>
           ${this.rowHtml("opp", "OPPONENT")}
@@ -58,8 +65,13 @@ class OverlayController {
           <span class="dock-title">忍術<br>JUTSU</span>
           <div class="dock-row">${this.skillPanelHtml()}</div>
         </div>
-        <div id="seal-pad" hidden></div>
         <div id="skill-cast" hidden></div>
+        <div id="skill-test" hidden></div>
+        <div id="seal-now" hidden>
+          <span class="seal-now-label">DETECTED</span>
+          <span class="seal-now-img"></span>
+          <span class="seal-now-name">—</span>
+        </div>
         <pre id="detect-debug" hidden></pre>
         <div id="battle-log" hidden></div>
         <div id="seal-guide" hidden>
@@ -76,11 +88,13 @@ class OverlayController {
     this.menu = this.app.querySelector("#menu")!;
     this.menuError = this.app.querySelector(".menu-error")!;
     this.lobby = this.app.querySelector("#lobby")!;
+    this.prep = this.app.querySelector("#prep")!;
     this.camMount = this.app.querySelector("#cam-mount")!;
-    this.sealPad = this.app.querySelector("#seal-pad")!;
     this.sealHud = this.app.querySelector("#seal-hud")!;
     this.skillPanel = this.app.querySelector("#skill-dock")!;
     this.skillCast = this.app.querySelector("#skill-cast")!;
+    this.skillTest = this.app.querySelector("#skill-test")!;
+    this.sealNow = this.app.querySelector("#seal-now")!;
     this.debugEl = this.app.querySelector("#detect-debug")!;
     this.sealGuide = this.app.querySelector("#seal-guide")!;
     this.logEl = this.app.querySelector("#battle-log")!;
@@ -145,6 +159,17 @@ class OverlayController {
     this.lobby.hidden = true;
   }
 
+  // ── pre-round camera check ──
+  showPrep(): void {
+    this.prep.hidden = false;
+  }
+  setPrepStatus(text: string): void {
+    this.prep.querySelector(".prep-status")!.textContent = text;
+  }
+  hidePrep(): void {
+    this.prep.hidden = true;
+  }
+
   private rowHtml(side: Side, label: string): string {
     return `<div class="seal-row" data-side="${side}">
       <span class="seal-row-label">${label}</span>
@@ -197,6 +222,7 @@ class OverlayController {
   showMenu(): void {
     this.menu.hidden = false;
     this.lobby.hidden = true;
+    this.prep.hidden = true;
   }
   hideMenu(): void {
     this.menu.hidden = true;
@@ -230,8 +256,8 @@ class OverlayController {
   /** a skill was cast → big centre banner with its image for 3 seconds */
   flashSkill(side: Side, skillId: string): void {
     if (!skillById(skillId)) return;
-    const who = side === "me" ? "YOU" : "OPPONENT";
-    this.skillCast.innerHTML = `<span class="skill-cast-who skill-cast-who--${side}">${who}</span>${skillHtml(skillId)}`;
+    const who = side === "me" ? "YOU" : "OPP";
+    this.skillCast.innerHTML = `<span class="skill-cast-who skill-cast-who--${side}">${who} CAST</span>`;
     this.skillCast.hidden = false;
     // force reflow so the .on transition replays on rapid re-casts
     void this.skillCast.offsetWidth;
@@ -241,13 +267,31 @@ class OverlayController {
       this.skillCast.classList.remove("on");
       this.skillCast.hidden = true;
       this.skillCast.innerHTML = "";
-    }, 3000);
+    }, 2000);
 
     if (side === "me") {
       const row = this.skillPanel.querySelector(`.skill-line[data-skill="${skillId}"]`);
       row?.classList.add("fired");
       window.setTimeout(() => row?.classList.remove("fired"), 900);
     }
+  }
+
+  // ── TEMP: manual cast buttons in the middle (remove later) ──
+  showSkillTest(onCast: (skillId: string) => void): void {
+    this.skillTest.hidden = false;
+    this.skillTest.innerHTML = `<span class="skill-test-label">TEST · cast</span>`;
+    for (const s of SKILLS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "skill-test-btn";
+      btn.innerHTML = `<b>${s.nameJa}</b><small>${s.name}</small>`;
+      btn.addEventListener("click", () => onCast(s.id));
+      this.skillTest.appendChild(btn);
+    }
+  }
+  hideSkillTest(): void {
+    this.skillTest.hidden = true;
+    this.skillTest.innerHTML = "";
   }
 
   // ── skill panel (the jutsu list, always visible in battle) ──
@@ -303,28 +347,23 @@ class OverlayController {
     return !this.debugEl.hidden;
   }
 
-  // ── on-screen seal pad (camera fallback / assist) ──
-  showSealPad(onSeal: (id: string) => void): void {
-    this.sealPad.hidden = false;
-    this.sealPad.innerHTML = "";
-    for (const id of SEAL_IDS) {
-      const sign = HAND_SIGNS.find((s) => s.id === id)!;
-      const btn = document.createElement("button");
-      btn.className = "seal-btn";
-      btn.type = "button";
-      btn.innerHTML = `<b>${sign.kanji}</b><small>${sign.en}</small>`;
-      btn.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        btn.classList.add("tapped");
-        onSeal(id);
-        window.setTimeout(() => btn.classList.remove("tapped"), 150);
-      });
-      this.sealPad.appendChild(btn);
-    }
+  // ── big "currently detected" seal box — shows the existing seal PNG, enlarged ──
+  showSealNow(): void {
+    this.sealNow.hidden = false;
+    this.setSealNow(null, 0);
   }
-  hideSealPad(): void {
-    this.sealPad.hidden = true;
-    this.sealPad.innerHTML = "";
+  hideSealNow(): void {
+    this.sealNow.hidden = true;
+  }
+  setSealNow(id: string | null, score: number): void {
+    const s = id && id !== "none" ? signById(id) : undefined;
+    this.sealNow.querySelector(".seal-now-img")!.innerHTML = s
+      ? sealHtml(id!, "seal-cell--now")
+      : `<span class="seal-cell seal-cell--now seal-cell--empty"><b>—</b></span>`;
+    this.sealNow.querySelector(".seal-now-name")!.textContent = s
+      ? `${s.en} · ${s.kanji}   ${Math.round(score * 100)}%`
+      : "—";
+    this.sealNow.classList.toggle("on", Boolean(s));
   }
 
   // ── rolling battle log ──

@@ -1,16 +1,13 @@
 /**
- * The five jutsu. Each is a sequence of 3–5 hand-sign ids (see handSigns.ts).
- * Four sequences are taken from jutsu.csv in Kazuhito00/NARUTO-HandSignDetection
- * (Fireball trimmed 6→5); "Great Breakthrough" is the canonical wind jutsu,
- * added so the FIRE→WIND→WATER→FIRE clash triangle is fully covered.
+ * The five jutsu. Every attack is a 3-seal combo; the one defensive jutsu
+ * (Clone) is a quick 2-seal.
  *
- * `action` / `element` feed straight into the server's existing combat engine:
- *   ATTACK + element → damage / clash
- *   REFLECT          → bounce the next hit back
+ * `action` / `element` feed the server's combat engine:
+ *   ATTACK + element → damage
  *   PROTECT          → block the next hit
  */
 export type SkillAction = "ATTACK" | "REFLECT" | "PROTECT";
-export type SkillElement = "FIRE" | "WATER" | "WIND";
+export type SkillElement = "FIRE" | "WATER" | "WIND" | "EARTH";
 
 export interface SkillDef {
   id: string;
@@ -26,15 +23,15 @@ export const SKILLS: SkillDef[] = [
     id: "clone",
     name: "Clone Jutsu",
     nameJa: "分身の術",
-    seals: ["ram", "snake", "tiger"],
-    action: "REFLECT",
+    seals: ["ram", "snake"],
+    action: "PROTECT", // decoys soak the next hit — quick 2-seal defence
     element: null,
   },
   {
     id: "fireball",
     name: "Fireball Jutsu",
     nameJa: "火遁・豪火球の術",
-    seals: ["snake", "ram", "monkey", "horse", "tiger"],
+    seals: ["snake", "tiger", "horse"],
     action: "ATTACK",
     element: "FIRE",
   },
@@ -55,12 +52,12 @@ export const SKILLS: SkillDef[] = [
     element: "WIND",
   },
   {
-    id: "substitution",
-    name: "Substitution Jutsu",
-    nameJa: "替え身の術",
-    seals: ["ram", "boar", "ox", "dog", "snake"],
-    action: "PROTECT",
-    element: null,
+    id: "earth_dragon",
+    name: "Earth Dragon Bullet",
+    nameJa: "土遁・土龍弾",
+    seals: ["boar", "ox", "dragon"],
+    action: "ATTACK",
+    element: "EARTH",
   },
 ];
 

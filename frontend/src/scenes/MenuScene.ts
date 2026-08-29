@@ -3,13 +3,13 @@ import { bus, Events } from "../core/EventBus";
 import { STAGE_WIDTH } from "../core/GameConfig";
 import { net } from "../core/Session";
 import { Overlay } from "../ui/Overlay";
-import type { ConnectOpts, Phase } from "../types";
+import type { ConnectOpts } from "../types";
 
 /**
- * Menu + lobby. The DOM form (Overlay) either "Create room" (no code → server
- * allocates one) or "Join room" (with a code). After connecting we sit in the
- * lobby showing the room code until the match goes `live` (both players ready),
- * then start Battle.
+ * Menu + lobby. "Create room" (no code → server allocates one) or "Join room"
+ * (with a code). Sit in the lobby showing the room code until the opponent is
+ * present, then start Battle — where the camera-check + 3·2·1 countdown gate the
+ * actual round.
  */
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -20,9 +20,10 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(0, 0, STAGE_WIDTH, this.scale.height, 0x0b0f17).setOrigin(0);
 
     Overlay.showMenu();
-    Overlay.hideSealPad();
+    Overlay.hideSealNow();
     Overlay.hideSealHud();
     Overlay.hideSkillPanel();
+    Overlay.hideSkillTest();
     Overlay.hideSealGuide();
     Overlay.setDebug(null);
     Overlay.hideLog();
@@ -31,7 +32,6 @@ export class MenuScene extends Phaser.Scene {
     bus.on(Events.RESET_REQUEST, this.onCancel, this);
     bus.on(Events.NET_JOINED, this.onJoined, this);
     bus.on(Events.PEER_JOINED, this.onPeerJoined, this);
-    bus.on(Events.NET_MATCH, this.onMatch, this);
     bus.on(Events.NET_ERROR, this.onError, this);
     bus.on(Events.NET_CLOSE, this.onClose, this);
 
@@ -40,7 +40,6 @@ export class MenuScene extends Phaser.Scene {
       bus.off(Events.RESET_REQUEST, this.onCancel, this);
       bus.off(Events.NET_JOINED, this.onJoined, this);
       bus.off(Events.PEER_JOINED, this.onPeerJoined, this);
-      bus.off(Events.NET_MATCH, this.onMatch, this);
       bus.off(Events.NET_ERROR, this.onError, this);
       bus.off(Events.NET_CLOSE, this.onClose, this);
     });
@@ -52,18 +51,18 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private onJoined(info: { code: string; peerPresent: boolean }): void {
-    Overlay.showLobby(info.code, info.peerPresent);
+    if (info.peerPresent) this.toBattle();
+    else Overlay.showLobby(info.code, false);
   }
 
   private onPeerJoined(): void {
-    Overlay.setLobbyStatus("Opponent joined — starting…");
+    this.toBattle();
   }
 
-  private onMatch(m: { phase: Phase }): void {
-    if (m.phase === "live") {
-      Overlay.hideLobby();
-      this.scene.start("Battle");
-    }
+  private toBattle(): void {
+    Overlay.hideMenu();
+    Overlay.hideLobby();
+    this.scene.start("Battle");
   }
 
   private onCancel(): void {

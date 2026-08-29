@@ -40,10 +40,11 @@ export class NetworkClient {
     this.ws = ws;
 
     ws.addEventListener("open", () => {
-      // no room code → server allocates one and returns it in `joined`
+      // no room code → server allocates one and returns it in `joined`.
+      // We do NOT auto-ready — the client sends `ready` only once the local
+      // camera is on (BattleScene), so the match goes `live` = both cameras ready.
       const room = opts.room.trim();
       this.raw(room ? { type: "join", code: room, name: opts.player } : { type: "join", name: opts.player });
-      this.raw({ type: "ready" });
       for (const m of this.queued.splice(0)) ws.send(JSON.stringify(m));
       bus.emit(Events.NET_OPEN);
     });
@@ -129,9 +130,14 @@ export class NetworkClient {
     this.input(sign, "up");
   }
 
+  /** tell the server this player is ready (sent once the local camera is on) */
+  ready(): void {
+    this.raw({ type: "ready" });
+  }
+
   reset(): void {
     this.raw({ type: "reset" });
-    this.raw({ type: "ready" });
+    this.raw({ type: "ready" }); // rematch: cameras already on, go straight to the countdown
   }
 
   /** WebRTC signalling passthrough for VideoCall */

@@ -2,46 +2,38 @@ import Phaser from "phaser";
 import { STAGE_HEIGHT, STAGE_WIDTH, GROUND_Y } from "../core/GameConfig";
 
 /**
- * Spec §4.2 layer 1. Pure scenery — never touched by battle logic. Everything
- * here is `setScrollFactor(0)` and gets a slow drift so a future camera shake
- * or parallax pass has something to move against.
+ * Spec §4.2 layer 1. Pure scenery — never touched by battle logic. The arena
+ * photo (public/assets/backgrounds/arena.png) is scaled to cover the stage;
+ * a soft dark wash + a ground shadow keep the fighters and HUD readable.
  */
 export class BackgroundLayer {
   constructor(scene: Phaser.Scene) {
-    // sky gradient (two stacked rects — cheap stand-in for real art)
-    scene.add.rectangle(0, 0, STAGE_WIDTH, STAGE_HEIGHT, 0x141a2e).setOrigin(0).setScrollFactor(0);
-    scene.add
-      .rectangle(0, STAGE_HEIGHT * 0.45, STAGE_WIDTH, STAGE_HEIGHT * 0.55, 0x0d1120)
-      .setOrigin(0)
-      .setScrollFactor(0);
-
-    // far ridgeline
-    const far = scene.add.graphics().setScrollFactor(0);
-    far.fillStyle(0x1c2440, 1);
-    far.beginPath();
-    far.moveTo(0, GROUND_Y);
-    for (let x = 0; x <= STAGE_WIDTH; x += 120) {
-      far.lineTo(x + 60, GROUND_Y - 120 - ((x / 120) % 2) * 40);
-      far.lineTo(x + 120, GROUND_Y);
+    if (scene.textures.exists("bg-arena")) {
+      const bg = scene.add.image(STAGE_WIDTH / 2, STAGE_HEIGHT / 2, "bg-arena").setScrollFactor(0);
+      const cover = Math.max(STAGE_WIDTH / bg.width, STAGE_HEIGHT / bg.height);
+      bg.setScale(cover);
+      // gentle parallax drift
+      scene.tweens.add({
+        targets: bg,
+        x: bg.x - 16,
+        duration: 9000,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+    } else {
+      scene.add.rectangle(0, 0, STAGE_WIDTH, STAGE_HEIGHT, 0x141a2e).setOrigin(0).setScrollFactor(0);
     }
-    far.closePath();
-    far.fillPath();
 
-    // a lazy drift so the scene isn't dead-still
-    scene.tweens.add({
-      targets: far,
-      x: -24,
-      duration: 8000,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
-    });
-
-    // arena floor
+    // dark wash so bright scenery doesn't drown the sprites / HUD
+    scene.add.rectangle(0, 0, STAGE_WIDTH, STAGE_HEIGHT, 0x0a0d16, 0.32).setOrigin(0).setScrollFactor(0);
+    // bottom vignette + ground shadow where the fighters stand
     scene.add
-      .rectangle(0, GROUND_Y, STAGE_WIDTH, STAGE_HEIGHT - GROUND_Y, 0x0a0d16)
-      .setOrigin(0)
+      .rectangle(0, STAGE_HEIGHT, STAGE_WIDTH, STAGE_HEIGHT * 0.4, 0x05070c, 0.55)
+      .setOrigin(0, 1)
       .setScrollFactor(0);
-    scene.add.rectangle(0, GROUND_Y, STAGE_WIDTH, 3, 0x3a4a7a).setOrigin(0).setScrollFactor(0);
+    scene.add
+      .ellipse(STAGE_WIDTH / 2, GROUND_Y + 6, STAGE_WIDTH * 1.1, 60, 0x000000, 0.35)
+      .setScrollFactor(0);
   }
 }

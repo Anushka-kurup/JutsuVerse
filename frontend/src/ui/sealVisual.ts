@@ -1,4 +1,4 @@
-import { signById, skillById } from "../types";
+import { signById } from "../types";
 
 /**
  * Renders a seal / skill as an <img>, falling back to text when the image is
@@ -6,7 +6,6 @@ import { signById, skillById } from "../types";
  * The <img> sits on top of the text; `onerror` removes it so the text shows.
  */
 const SEALS = `${import.meta.env.BASE_URL}assets/seals/`;
-const SKILLS_IMG = `${import.meta.env.BASE_URL}assets/skills/`;
 
 export function sealHtml(id: string, extraClass = ""): string {
   const s = signById(id);
@@ -24,10 +23,3 @@ export function sealTextHtml(id: string, extraClass = ""): string {
   </span>`;
 }
 
-export function skillHtml(id: string): string {
-  const s = skillById(id);
-  return `<span class="skill-visual" data-skill="${id}">
-    <img src="${SKILLS_IMG}${id}.png" alt="${id}" onerror="this.remove()" />
-    <b>${s ? `${s.nameJa}<small>${s.name}</small>` : id}</b>
-  </span>`;
-}

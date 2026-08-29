@@ -52,11 +52,11 @@ const guard = (id: string, seq: Sign[], guardTicks: number): Command => ({
 });
 
 export const COMMANDS: Command[] = [
-  attack("fireball", ["snake", "ram", "monkey", "horse", "tiger"]),
+  attack("fireball", ["snake", "tiger", "horse"]),
   attack("water_trumpet", ["dragon", "tiger", "hare"]),
   attack("great_breakthrough", ["tiger", "dog", "horse"]),
-  guard("clone", ["ram", "snake", "tiger"], 30), // Reflect-ish: short block
-  guard("substitution", ["ram", "boar", "ox", "dog", "snake"], 50), // Protect: long block
+  attack("earth_dragon", ["boar", "ox", "dragon"]),
+  guard("clone", ["ram", "snake"], 40), // the one defence: quick 2-seal, clones soak the next hit
 ];
 
 export function commandById(id: string): Command | undefined {

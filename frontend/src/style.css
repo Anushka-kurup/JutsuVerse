@@ -205,33 +205,76 @@ body {
   cursor: pointer;
 }
 
+/* ── pre-round camera check ─────────────────────────────────────── */
+#prep {
+  position: absolute;
+  left: 50%;
+  top: 16%;
+  transform: translateX(-50%);
+  z-index: 25;
+  width: min(440px, 90vw);
+  padding: 1.1rem 1.4rem;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(5, 8, 13, 0.9);
+  pointer-events: none;
+}
+
+#prep[hidden] {
+  display: none;
+}
+
+.prep-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #ffd166;
+}
+
+.prep-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.prep-status {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
 /* ── camera preview (spec layer 5) ───────────────────────────────── */
 #cam-mount {
-  position: absolute;
-  left: 16px;
-  bottom: calc(var(--dock-h) + 14px);
+  position: static;
 }
 
 .cam-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 240px;
+  display: contents; /* children pin themselves to the screen edges */
 }
 
+/* my face fixed to the left edge, opponent's to the right */
 .cam-window {
-  position: relative;
-  width: 100%;
+  position: fixed;
+  top: 42%;
+  transform: translateY(-50%);
+  width: clamp(150px, 15vw, 230px);
   aspect-ratio: 4 / 3;
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
   background: #0e121a;
+  z-index: 4;
+}
+
+.cam-window--local {
+  left: 10px;
 }
 
 .cam-window--remote {
-  width: 120px;
-  opacity: 0.9;
+  right: 10px;
 }
 
 .cam-feed,
@@ -300,6 +343,10 @@ body {
 }
 
 .cam-toggle {
+  position: fixed;
+  left: 10px;
+  bottom: calc(var(--dock-h) + 14px);
+  width: clamp(150px, 15vw, 230px);
   padding: 0.5rem;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -308,6 +355,7 @@ body {
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
+  z-index: 4;
 }
 
 .cam-preview--on .cam-toggle {
@@ -317,6 +365,10 @@ body {
 
 /* persistent seal buffer under the You feed (keyboard-style input history) */
 .cam-seq {
+  position: fixed;
+  left: 10px;
+  bottom: calc(var(--dock-h) + 56px);
+  width: clamp(150px, 15vw, 230px);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -324,6 +376,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(7, 10, 17, 0.88);
+  z-index: 4;
 }
 
 .cam-seq-label {
@@ -376,6 +429,9 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* the seal photos have a lot of background around the hands — zoom into the
+     centre so only the hand-seal region shows, trimming the outer part */
+  transform: scale(1.4);
 }
 
 .seal-cell--empty {
@@ -409,48 +465,24 @@ body {
   box-shadow: 0 0 8px rgba(255, 84, 112, 0.6);
 }
 
-.skill-visual {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 10px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.skill-visual img {
-  height: 2rem;
-}
-
-.skill-visual small {
-  display: block;
-  font-size: 0.62rem;
-  font-weight: 500;
-  opacity: 0.85;
-}
-
-/* ── skill cast: big centre banner shown for 3s when a jutsu fires ── */
+/* ── skill cast: small toast at the top when a jutsu fires ─────────── */
 #skill-cast {
   position: absolute;
   left: 50%;
-  top: 32%;
-  transform: translate(-50%, -50%) scale(0.82);
+  top: 8px;
+  transform: translateX(-50%) translateY(-8px);
   z-index: 26;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px 20px;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
   border: 1px solid var(--line);
-  border-radius: 18px;
-  background: rgba(5, 8, 13, 0.9);
+  border-radius: 999px;
+  background: rgba(5, 8, 13, 0.92);
   opacity: 0;
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transition: opacity 0.16s ease, transform 0.16s ease;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 #skill-cast[hidden] {
@@ -459,33 +491,14 @@ body {
 
 #skill-cast.on {
   opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-#skill-cast .skill-visual {
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
-  font-size: 1.5rem;
-  text-align: center;
-}
-
-#skill-cast .skill-visual img {
-  height: clamp(120px, 22vh, 220px);
-  width: auto;
-  max-width: 78vw;
-  border-radius: 10px;
-}
-
-#skill-cast .skill-visual small {
-  font-size: 0.8rem;
+  transform: translateX(-50%) translateY(0);
 }
 
 .skill-cast-who {
-  font-size: 0.7rem;
+  font-size: 0.58rem;
   font-weight: 800;
-  letter-spacing: 0.16em;
-  padding: 0.15rem 0.7rem;
+  letter-spacing: 0.1em;
+  padding: 0.12rem 0.5rem;
   border-radius: 999px;
   color: #fff;
 }
@@ -549,48 +562,54 @@ body {
   transform: scale(1);
 }
 
-/* ── on-screen seal pad (camera fallback / assist) ───────────────── */
-#seal-pad {
+/* ── big "currently detected" seal box (bottom-right) — my existing seal PNG, enlarged ── */
+#seal-now {
   position: absolute;
-  right: 16px;
+  right: 14px;
   bottom: calc(var(--dock-h) + 14px);
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.4rem;
-  width: min(420px, 60vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(7, 10, 17, 0.82);
+  z-index: 5;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-#seal-pad[hidden] {
+#seal-now[hidden] {
   display: none;
 }
 
-.seal-btn {
-  display: grid;
-  place-items: center;
-  gap: 0.1rem;
-  padding: 0.45rem 0.2rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(30, 37, 52, 0.9);
-  color: var(--ink);
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
+#seal-now.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 16px rgba(79, 125, 255, 0.45);
 }
 
-.seal-btn b {
-  font-size: 1.15rem;
-}
-
-.seal-btn small {
-  font-size: 0.55rem;
+.seal-now-label {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
   color: var(--muted);
 }
 
-.seal-btn.tapped {
-  background: var(--accent);
-  transform: scale(0.95);
+.seal-cell--now {
+  width: clamp(150px, 22vh, 260px);
+  height: clamp(150px, 22vh, 260px);
+  border-radius: 14px;
+  font-size: 6rem;
+}
+
+.seal-cell--now img {
+  transform: scale(1.7); /* crop tighter to the hands in the big box */
+}
+
+.seal-now-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 /* ── jutsu dock: full-width strip across the bottom third ────────── */
@@ -727,6 +746,57 @@ body {
   opacity: 1;
 }
 
+/* ── TEMP: manual cast row, centre screen ──────────────────────── */
+#skill-test {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px dashed rgba(255, 209, 102, 0.5);
+  border-radius: 12px;
+  background: rgba(7, 10, 17, 0.7);
+  z-index: 22;
+}
+
+#skill-test[hidden] {
+  display: none;
+}
+
+.skill-test-label {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #ffd166;
+}
+
+.skill-test-btn {
+  display: grid;
+  gap: 1px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(30, 38, 54, 0.9);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.skill-test-btn:hover {
+  border-color: #ffd166;
+}
+
+.skill-test-btn b {
+  font-size: 0.82rem;
+}
+
+.skill-test-btn small {
+  font-size: 0.56rem;
+  color: var(--muted);
+}
+
 /* ── seal guide (press G): how to form each seal ────────────────── */
 #seal-guide {
   position: absolute;
@@ -801,7 +871,8 @@ body {
 }
 
 .seal-cell--guide img {
-  object-fit: contain;
+  object-fit: cover;
+  transform: scale(1.5);
 }
 
 .seal-guide-cell figcaption {
