@@ -1,46 +1,27 @@
-export interface PlayerPublic {
-  player_id: string;
-  hp: number;
-  energy: number;
-  alive: boolean;
-  current_sign: string;
-  active_effect: "REFLECT" | "PROTECT" | null;
-  reflect_uses_left: number;
-  protect_uses_left: number;
+import type { Sign } from "@jutsu/protocol";
+
+export type WebRtcSignal =
+  | { kind: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
+  | { kind: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
+  | { kind: "webrtc-ice"; candidate: RTCIceCandidateInit };
+
+export function isWebRtcSignal(value: unknown): value is WebRtcSignal {
+  if (!value || typeof value !== "object" || !("kind" in value)) return false;
+  const kind = (value as { kind: unknown }).kind;
+  return kind === "webrtc-offer" || kind === "webrtc-answer" || kind === "webrtc-ice";
 }
-
-export interface MatchPublic {
-  p1: PlayerPublic;
-  p2: PlayerPublic;
-  winner: string | null;
-  log: string[];
-}
-
-export type ServerMessage =
-  | { type: "state"; match: MatchPublic }
-  | { type: "error"; message: string }
-  | { type: "webrtc-peer"; peer_id: string; initiator: boolean }
-  | { type: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-ice"; candidate: RTCIceCandidateInit };
-
-export type ClientMessage =
-  | { type: "sign"; sign: string }
-  | { type: "reset" }
-  | { type: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-ice"; candidate: RTCIceCandidateInit };
 
 export interface SignDef {
-  sign: string;
+  sign: Sign;
   label: string;
   kind: "ATTACK" | "REFLECT" | "PROTECT";
 }
 
 export const SIGNS: SignDef[] = [
-  { sign: "TIGER", label: "Tiger → Fire", kind: "ATTACK" },
-  { sign: "SNAKE", label: "Snake → Water", kind: "ATTACK" },
-  { sign: "BIRD", label: "Bird → Wind", kind: "ATTACK" },
-  { sign: "RAM", label: "Ram → Reflect", kind: "REFLECT" },
-  { sign: "BOAR", label: "Boar → Protect", kind: "PROTECT" },
+  { sign: "TIGER", label: "Tiger seal", kind: "ATTACK" },
+  { sign: "SNAKE", label: "Snake seal", kind: "ATTACK" },
+  { sign: "BIRD", label: "Bird seal", kind: "ATTACK" },
+  { sign: "RAM", label: "Ram seal", kind: "REFLECT" },
+  { sign: "BOAR", label: "Boar seal", kind: "PROTECT" },
+  { sign: "OX", label: "Ox seal", kind: "ATTACK" },
 ];

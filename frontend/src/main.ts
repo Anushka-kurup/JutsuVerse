@@ -1,15 +1,24 @@
 import "./style.css";
-import { SIGNS, type ClientMessage, type MatchPublic, type PlayerPublic, type ServerMessage } from "./types";
+import { MAX_HP, TICK_HZ, type FighterPublic, type Seat, type ServerMsg, type Sign } from "@jutsu/protocol";
 import { initHandSignDetector, startCamera, stopCamera, detectFrame, drawDetections } from "./handTracker";
+import { GameSocket } from "./net/gameSocket";
+import { isWebRtcSignal, SIGNS, type WebRtcSignal } from "./types";
 
-const SEND_INTERVAL_MS = 150;
-const VALID_SIGNS = new Set(SIGNS.map((s) => s.sign)); // TIGER/SNAKE/BIRD/RAM/BOAR
+const VALID_SIGNS = new Set<Sign>(SIGNS.map((s) => s.sign));
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
-let ws: WebSocket | null = null;
-let myId = "";
-let holdTimer: number | null = null;
+let gameSocket: GameSocket | null = null;
+let myName = "";
+let mySeat: Seat | null = null;
+let opponentName = "Opponent";
+let roomCode = "";
+let heldSign: Sign | null = null;
+let matchPhase: "waiting" | "connecting" | "live" | "ended" = "waiting";
+let matchWinner: Seat | "draw" | null = null;
+let disconnectMessage = "Disconnected from server";
+let previousMoveIds: Record<Seat, string | null> = { a: null, b: null };
+const gameLog: string[] = [];
 
 // ── camera-driven sign detection ────────────────────────────────
 let cameraOn = false;
@@ -33,14 +42,14 @@ function renderConnectScreen(errorMsg?: string) {
     <div class="card">
       <div class="field">
         <label for="server">Server</label>
-        <input id="server" value="ws://localhost:8000" />
+        <input id="server" value="ws://localhost:8080" />
       </div>
       <div class="field">
         <label for="room">Room</label>
         <input id="room" value="match1" />
       </div>
       <div class="field">
-        <label for="player">Player ID</label>
+        <label for="player">Player Name</label>
         <input id="player" value="p1" />
       </div>
       <button class="connect-btn" id="connect">Connect</button>
@@ -59,70 +68,123 @@ function renderConnectScreen(errorMsg?: string) {
 
 // ── websocket ────────────────────────────────────────────────────
 function connect(server: string, room: string, player: string) {
-  myId = player;
-  const socket = new WebSocket(`${server}/ws/${room}/${player}`);
+  myName = player;
+  mySeat = null;
+  opponentName = "Opponent";
+  opponentId = null;
+  roomCode = room.toUpperCase();
+  disconnectMessage = "Disconnected from server";
 
-  socket.addEventListener("open", () => {
-    ws = socket;
-    renderGameScreen();
-  });
-
-  socket.addEventListener("message", (event) => {
-    const msg: ServerMessage = JSON.parse(event.data);
-    if (msg.type === "state") {
-      updateGameScreen(msg.match);
-    } else if (msg.type === "error") {
-      socket.close();
-      renderConnectScreen(msg.message);
-    } else if (msg.type === "webrtc-peer") {
-      opponentId = msg.peer_id;
-      isInitiator = msg.initiator;
-      trySetupWebRTC().catch(console.error);
-    } else if (msg.type === "webrtc-offer") {
-      handleRemoteOffer(msg.sdp).catch(console.error);
-    } else if (msg.type === "webrtc-answer") {
-      peerConnection?.setRemoteDescription(msg.sdp).catch(console.error);
-    } else if (msg.type === "webrtc-ice") {
-      handleRemoteIce(msg.candidate).catch(console.error);
-    }
-  });
-
-  socket.addEventListener("close", () => {
-    if (ws === socket) {
-      ws = null;
-      stopHolding();
+  const socket = new GameSocket({
+    onMessage: handleServerMessage,
+    onClose: () => {
+      if (gameSocket !== socket) return;
+      gameSocket = null;
+      heldSign = null;
       shutdownCamera();
       resetWebRTC();
-      renderConnectScreen("Disconnected from server");
-    }
+      renderConnectScreen(disconnectMessage);
+    },
+    onError: () => {
+      disconnectMessage = "Could not reach server";
+    },
   });
-
-  socket.addEventListener("error", () => {
-    renderConnectScreen("Could not reach server");
-  });
-}
-
-function send(msg: ClientMessage) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(msg));
+  gameSocket = socket;
+  try {
+    socket.connect(server, roomCode, player);
+  } catch {
+    gameSocket = null;
+    renderConnectScreen("Invalid server address");
   }
 }
 
-// ── hold-to-cast ─────────────────────────────────────────────────
-function startHolding(sign: string, btn?: HTMLButtonElement) {
+function handleServerMessage(msg: ServerMsg) {
+  if (msg.type === "joined") {
+    myName = msg.name;
+    mySeat = msg.seat;
+    roomCode = msg.code;
+    matchPhase = "waiting";
+    matchWinner = null;
+    gameLog.length = 0;
+    addLog(`Joined room ${roomCode} as ${myName}`);
+    renderGameScreen();
+    gameSocket?.sendReady();
+    if (msg.peerPresent) configurePeer(msg.seat === "a" ? "b" : "a");
+    return;
+  }
+
+  if (msg.type === "peer_joined") {
+    opponentName = msg.name;
+    configurePeer(msg.seat);
+    addLog(`${msg.name} joined the room`);
+    gameSocket?.sendReady();
+    updateConnectionStatus();
+    return;
+  }
+
+  if (msg.type === "peer_left") {
+    addLog(`${opponentName} left the room`);
+    opponentName = "Opponent";
+    opponentId = null;
+    resetWebRTC();
+    updateConnectionStatus();
+    return;
+  }
+
+  if (msg.type === "state") {
+    updateGameScreen(msg.a, msg.b);
+    return;
+  }
+
+  if (msg.type === "match_state") {
+    if (msg.phase !== matchPhase) addLog(`Match is ${msg.phase}`);
+    matchPhase = msg.phase;
+    matchWinner = msg.winner ?? null;
+    updateBanner();
+    updateConnectionStatus();
+    return;
+  }
+
+  if (msg.type === "signal" && isWebRtcSignal(msg.payload)) {
+    handleWebRtcSignal(msg.payload);
+    return;
+  }
+
+  if (msg.type === "error") {
+    disconnectMessage = msg.message;
+    gameSocket?.close();
+  }
+}
+
+function configurePeer(seat: Seat) {
+  opponentId = seat;
+  isInitiator = mySeat === "a";
+  trySetupWebRTC().catch(console.error);
+}
+
+function handleWebRtcSignal(signal: WebRtcSignal) {
+  if (signal.kind === "webrtc-offer") {
+    handleRemoteOffer(signal.sdp).catch(console.error);
+  } else if (signal.kind === "webrtc-answer") {
+    peerConnection?.setRemoteDescription(signal.sdp).catch(console.error);
+  } else {
+    handleRemoteIce(signal.candidate).catch(console.error);
+  }
+}
+
+// ── sign input ───────────────────────────────────────────────────
+function startHolding(sign: Sign, btn?: HTMLButtonElement) {
+  if (heldSign === sign) return;
   stopHolding();
+  heldSign = sign;
   (btn ?? signButtons[sign])?.classList.add("holding");
-  send({ type: "sign", sign });
-  holdTimer = window.setInterval(() => send({ type: "sign", sign }), SEND_INTERVAL_MS);
+  gameSocket?.sendInput(sign, "down");
 }
 
 function stopHolding() {
-  if (holdTimer !== null) {
-    window.clearInterval(holdTimer);
-    holdTimer = null;
-  }
+  if (heldSign) gameSocket?.sendInput(heldSign, "up");
+  heldSign = null;
   document.querySelectorAll(".sign-btn.holding").forEach((el) => el.classList.remove("holding"));
-  send({ type: "sign", sign: "UNKNOWN" });
 }
 
 // ── game screen ──────────────────────────────────────────────────
@@ -154,7 +216,7 @@ function renderGameScreen() {
     <div class="actions-row">
       <button class="reset-btn" id="reset">Reset match</button>
     </div>
-    <div class="status">Connected as <strong>${myId}</strong> — hold a sign for ~1s to cast it</div>
+    <div class="status" id="connection-status"></div>
   `;
 
   signButtons = {};
@@ -176,19 +238,28 @@ function renderGameScreen() {
   }
 
   document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => {
-    send({ type: "reset" });
+    previousMoveIds = { a: null, b: null };
+    matchWinner = null;
+    addLog("Match reset");
+    updateBanner();
+    gameSocket?.resetMatch();
   });
 
   document.querySelector<HTMLButtonElement>("#cam-toggle")!.addEventListener("click", (e) => {
     toggleCamera(e.currentTarget as HTMLButtonElement);
   });
+
+  updateConnectionStatus();
+  renderLog();
 }
 
 // ── peer-to-peer video call ───────────────────────────────────────
 function createPeerConnection(): RTCPeerConnection {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   pc.onicecandidate = (e) => {
-    if (e.candidate) send({ type: "webrtc-ice", candidate: e.candidate.toJSON() });
+    if (e.candidate) {
+      gameSocket?.sendSignal({ kind: "webrtc-ice", candidate: e.candidate.toJSON() } satisfies WebRtcSignal);
+    }
   };
   pc.ontrack = (e) => {
     const remoteVideo = document.querySelector<HTMLVideoElement>("#remote-video");
@@ -220,11 +291,11 @@ async function trySetupWebRTC() {
     await flushPendingIce(pc);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    send({ type: "webrtc-answer", sdp: pc.localDescription! });
+    gameSocket?.sendSignal({ kind: "webrtc-answer", sdp: pc.localDescription! } satisfies WebRtcSignal);
   } else if (isInitiator) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    send({ type: "webrtc-offer", sdp: pc.localDescription! });
+    gameSocket?.sendSignal({ kind: "webrtc-offer", sdp: pc.localDescription! } satisfies WebRtcSignal);
   }
 }
 
@@ -239,7 +310,7 @@ async function handleRemoteOffer(sdp: RTCSessionDescriptionInit) {
   await flushPendingIce(peerConnection);
   const answer = await peerConnection.createAnswer();
   await peerConnection.setLocalDescription(answer);
-  send({ type: "webrtc-answer", sdp: peerConnection.localDescription! });
+  gameSocket?.sendSignal({ kind: "webrtc-answer", sdp: peerConnection.localDescription! } satisfies WebRtcSignal);
 }
 
 async function handleRemoteIce(candidate: RTCIceCandidateInit) {
@@ -250,10 +321,10 @@ async function handleRemoteIce(candidate: RTCIceCandidateInit) {
   }
 }
 
-function resetWebRTC() {
+function resetWebRTC(clearPeer = true) {
   peerConnection?.close();
   peerConnection = null;
-  opponentId = null;
+  if (clearPeer) opponentId = null;
   isInitiator = false;
   pendingOffer = null;
   pendingIce = [];
@@ -286,7 +357,7 @@ async function toggleCamera(toggleBtn: HTMLButtonElement) {
     stopCamera(video);
     canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     stopHolding();
-    resetWebRTC();
+    resetWebRTC(false);
     localStream = null;
     activeCamSign = "UNKNOWN";
     cameraOn = false;
@@ -333,7 +404,7 @@ function runCameraLoop(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
 
       if (sign !== activeCamSign) {
         activeCamSign = sign;
-        if (VALID_SIGNS.has(sign)) {
+        if (sign !== "UNKNOWN" && VALID_SIGNS.has(sign)) {
           startHolding(sign);
         } else {
           stopHolding();
@@ -354,42 +425,96 @@ function runCameraLoop(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
   cameraLoopId = requestAnimationFrame(() => void step());
 }
 
-function panelHtml(label: string, p: PlayerPublic) {
+function panelHtml(label: string, playerName: string, fighter: FighterPublic) {
+  const hpPercent = Math.max(0, Math.min(100, (fighter.hp / MAX_HP) * 100));
+  const bufferPercent = Math.min(100, (fighter.buffer.length / 3) * 100);
+  const buffer = fighter.buffer.length > 0 ? fighter.buffer.join(" → ") : "—";
+  const held = fighter.held.length > 0 ? fighter.held.join(", ") : "—";
+  const guardSeconds = fighter.guardLeft / TICK_HZ;
+
   return `
-    <h3><span>${label}</span><span>${p.player_id}</span></h3>
-    <div class="bar-label">HP ${p.hp.toFixed(0)}</div>
-    <div class="bar"><div class="bar-fill hp" style="width:${Math.max(0, p.hp)}%"></div></div>
-    <div class="bar-label">Energy ${p.energy.toFixed(0)}</div>
-    <div class="bar"><div class="bar-fill energy" style="width:${Math.max(0, p.energy)}%"></div></div>
-    <div class="meta-line">Sign: ${p.current_sign}${p.active_effect ? ` · ${p.active_effect} armed` : ""}</div>
-    <div class="meta-line">Reflect x${p.reflect_uses_left} · Protect x${p.protect_uses_left}</div>
+    <h3><span>${label}</span><span>${escapeHtml(playerName)}</span></h3>
+    <div class="bar-label">HP ${fighter.hp} / ${MAX_HP}</div>
+    <div class="bar"><div class="bar-fill hp" style="width:${hpPercent}%"></div></div>
+    <div class="bar-label">Sequence ${fighter.buffer.length} / 3</div>
+    <div class="bar"><div class="bar-fill energy" style="width:${bufferPercent}%"></div></div>
+    <div class="meta-line">Stance: ${fighter.stance}${fighter.moveId ? ` · ${escapeHtml(fighter.moveId)}` : ""}</div>
+    <div class="meta-line">Buffer: ${buffer} · Held: ${held}${guardSeconds > 0 ? ` · Guard ${guardSeconds.toFixed(1)}s` : ""}</div>
   `;
 }
 
-function updateGameScreen(match: MatchPublic) {
-  const me = match.p1.player_id === myId ? match.p1 : match.p2;
-  const opp = match.p1.player_id === myId ? match.p2 : match.p1;
+function updateGameScreen(a: FighterPublic, b: FighterPublic) {
+  if (!mySeat) return;
+  const me = mySeat === "a" ? a : b;
+  const opponent = mySeat === "a" ? b : a;
 
   const panelMe = document.querySelector<HTMLDivElement>("#panel-me");
   const panelOpp = document.querySelector<HTMLDivElement>("#panel-opp");
-  if (!panelMe || !panelOpp) return; // screen not mounted yet
+  if (!panelMe || !panelOpp) return;
 
-  panelMe.innerHTML = panelHtml("You", me);
-  panelMe.classList.toggle("dead", !me.alive);
-  panelOpp.innerHTML = panelHtml("Opponent", opp);
-  panelOpp.classList.toggle("dead", !opp.alive);
+  panelMe.innerHTML = panelHtml("You", myName, me);
+  panelMe.classList.toggle("dead", me.hp <= 0);
+  panelOpp.innerHTML = panelHtml("Opponent", opponentName, opponent);
+  panelOpp.classList.toggle("dead", opponent.hp <= 0);
 
-  const banner = document.querySelector<HTMLDivElement>("#banner")!;
-  if (match.winner) {
-    const won = match.winner === myId;
-    banner.innerHTML = `<div class="banner ${won ? "win" : "lose"}">${won ? "YOU WIN!" : "YOU LOSE"}</div>`;
-  } else {
+  recordMove("a", a);
+  recordMove("b", b);
+  updateBanner();
+}
+
+function recordMove(seat: Seat, fighter: FighterPublic) {
+  if (fighter.moveId && fighter.moveId !== previousMoveIds[seat]) {
+    const label = seat === mySeat ? "You" : opponentName;
+    addLog(`${label}: ${fighter.moveId}`);
+  }
+  previousMoveIds[seat] = fighter.moveId;
+}
+
+function updateBanner() {
+  const banner = document.querySelector<HTMLDivElement>("#banner");
+  if (!banner) return;
+  if (matchPhase !== "ended" || !matchWinner) {
     banner.innerHTML = "";
+    return;
   }
 
-  const log = document.querySelector<HTMLDivElement>("#log")!;
-  log.innerHTML = match.log.map((line) => `<div>${line}</div>`).join("");
+  if (matchWinner === "draw") {
+    banner.innerHTML = '<div class="banner">DRAW</div>';
+    return;
+  }
+
+  const won = matchWinner === mySeat;
+  banner.innerHTML = `<div class="banner ${won ? "win" : "lose"}">${won ? "YOU WIN!" : "YOU LOSE"}</div>`;
+}
+
+function updateConnectionStatus() {
+  const status = document.querySelector<HTMLDivElement>("#connection-status");
+  if (!status) return;
+  const peer = opponentId ? ` vs ${opponentName}` : " · waiting for opponent";
+  status.textContent = `${myName} · Room ${roomCode} · ${matchPhase}${peer}`;
+}
+
+function addLog(message: string) {
+  gameLog.push(message);
+  if (gameLog.length > 30) gameLog.shift();
+  renderLog();
+}
+
+function renderLog() {
+  const log = document.querySelector<HTMLDivElement>("#log");
+  if (!log) return;
+  log.innerHTML = gameLog.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
   log.scrollTop = log.scrollHeight;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]!);
 }
 
 renderConnectScreen();

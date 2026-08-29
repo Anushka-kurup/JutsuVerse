@@ -1,5 +1,6 @@
 import * as ort from "onnxruntime-web/wasm";
 import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
+import type { Sign } from "@jutsu/protocol";
 
 const MODEL_PATH = "/models/yolox_nano.onnx";
 const INPUT_SIZE = 416;
@@ -18,7 +19,8 @@ const HAND_SIGN_LABELS = [
 ] as const;
 
 // Only these signs currently have an action in the game protocol.
-const GAME_SIGN_BY_CLASS_ID: Record<number, string> = {
+const GAME_SIGN_BY_CLASS_ID: Record<number, Sign> = {
+  1: "OX",
   2: "TIGER",
   5: "SNAKE",
   7: "RAM",
@@ -38,7 +40,7 @@ export interface HandSignDetection {
 export interface FrameResult {
   detections: HandSignDetection[];
   elapsedMs: number;
-  sign: string;
+  sign: Sign | "UNKNOWN";
 }
 
 interface PreparedFrame {
