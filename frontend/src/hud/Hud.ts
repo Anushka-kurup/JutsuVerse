@@ -1,5 +1,7 @@
 import Phaser from "phaser";
+import { bus, Events } from "../core/EventBus";
 import { STAGE_WIDTH } from "../core/GameConfig";
+import { net } from "../core/Session";
 import type { FighterPublic, Side } from "../types";
 import { ComboIndicator } from "./ComboIndicator";
 import { HealthBar } from "./HealthBar";
@@ -26,6 +28,20 @@ export class Hud {
       opp: this.buildSide(scene, STAGE_WIDTH - margin, 1, "OPPONENT"),
     };
     this.combo = new ComboIndicator(scene, STAGE_WIDTH / 2, 120);
+
+    // show the real player names in place of YOU / OPPONENT
+    this.applyNames(net.myName, net.peerName);
+    bus.on(Events.NET_NAMES, this.onNames, this);
+    scene.events.once("shutdown", () => bus.off(Events.NET_NAMES, this.onNames, this));
+  }
+
+  private onNames(d: { me: string; opp: string }): void {
+    this.applyNames(d.me, d.opp);
+  }
+
+  private applyNames(me: string, opp: string): void {
+    if (me) this.sides.me.hp.setName(me);
+    if (opp) this.sides.opp.hp.setName(opp);
   }
 
   private buildSide(scene: Phaser.Scene, x: number, align: -1 | 1, name: string): SideWidgets {

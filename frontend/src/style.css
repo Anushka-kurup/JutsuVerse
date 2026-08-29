@@ -399,18 +399,7 @@ body {
 
 /* persistent seal buffer under the You feed (keyboard-style input history) */
 .cam-seq {
-  position: fixed;
-  left: 10px;
-  bottom: calc(var(--dock-h) + 56px);
-  width: clamp(150px, 15vw, 230px);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(7, 10, 17, 0.88);
-  z-index: 4;
+  display: none; /* the persistent seal buffer under the You feed is hidden */
 }
 
 .cam-seq-label {
@@ -527,8 +516,8 @@ body {
 #skill-cast {
   position: absolute;
   left: 50%;
-  top: 8px;
-  transform: translateX(-50%) translateY(-8px);
+  bottom: calc(var(--dock-h) + 12px); /* just above the jutsu dock */
+  transform: translateX(-50%) translateY(8px);
   z-index: 26;
   display: flex;
   align-items: center;

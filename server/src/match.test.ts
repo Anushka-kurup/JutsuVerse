@@ -86,8 +86,8 @@ test("defines all elemental levels with the requested damage", () => {
     water: ["ram", "monkey", "snake"],
   } as const;
   for (const element of ["fire", "earth", "water"] as const) {
-    assert.equal(attackById(`${element}_1`)?.damage, 1);
-    assert.equal(attackById(`${element}_2`)?.damage, 2);
+    assert.equal(attackById(`${element}_1`)?.damage, 3);
+    assert.equal(attackById(`${element}_2`)?.damage, 5);
     assert.equal(attackById(`${element}_3`), undefined);
     assert.equal(attackById(`${element}_1`)?.seq.length, 3);
     assert.equal(attackById(`${element}_2`)?.seq.length, 4);
@@ -110,7 +110,7 @@ test("elemental counter wins a clash regardless of level", () => {
   };
   const next = tickMatch(m);
   assert.equal(next.fighters.a.hp, MAX_HP);
-  assert.equal(next.fighters.b.hp, MAX_HP - 1);
+  assert.equal(next.fighters.b.hp, MAX_HP - 3);
   assert.deepEqual(next.pendingAttacks, { a: null, b: null });
 });
 
@@ -122,7 +122,7 @@ test("higher-level counter deals its own damage and takes none", () => {
   };
   const next = tickMatch(m);
   assert.equal(next.fighters.a.hp, MAX_HP);
-  assert.equal(next.fighters.b.hp, MAX_HP - 2);
+  assert.equal(next.fighters.b.hp, MAX_HP - 5);
 });
 
 test("same-element attacks both land their own damage", () => {
@@ -132,8 +132,8 @@ test("same-element attacks both land their own damage", () => {
     b: pending("b", "fire_1"),
   };
   const next = tickMatch(m);
-  assert.equal(next.fighters.a.hp, MAX_HP - 1);
-  assert.equal(next.fighters.b.hp, MAX_HP - 2);
+  assert.equal(next.fighters.a.hp, MAX_HP - 3);
+  assert.equal(next.fighters.b.hp, MAX_HP - 5);
 });
 
 test("equal-level same-element attacks both land", () => {
@@ -143,8 +143,8 @@ test("equal-level same-element attacks both land", () => {
     b: pending("b", "fire_2"),
   };
   const next = tickMatch(m);
-  assert.equal(next.fighters.a.hp, MAX_HP - 2);
-  assert.equal(next.fighters.b.hp, MAX_HP - 2);
+  assert.equal(next.fighters.a.hp, MAX_HP - 5);
+  assert.equal(next.fighters.b.hp, MAX_HP - 5);
 });
 
 test("one-second clash window is inclusive and rejects later attacks", () => {
@@ -154,7 +154,7 @@ test("one-second clash window is inclusive and rejects later attacks", () => {
     b: pending("b", "water_1", 20, 40),
   };
   const clashed = tickMatch(inside);
-  assert.equal(clashed.fighters.a.hp, MAX_HP - 1);
+  assert.equal(clashed.fighters.a.hp, MAX_HP - 3);
   assert.equal(clashed.fighters.b.hp, MAX_HP);
 
   const outside = { ...liveMatch(), tick: 19 };
@@ -163,7 +163,7 @@ test("one-second clash window is inclusive and rejects later attacks", () => {
     b: pending("b", "water_1", 21, 41),
   };
   const unopposed = tickMatch(outside);
-  assert.equal(unopposed.fighters.b.hp, MAX_HP - 1);
+  assert.equal(unopposed.fighters.b.hp, MAX_HP - 3);
   assert.notEqual(unopposed.pendingAttacks.b, null);
 });
 
@@ -172,7 +172,7 @@ test("unopposed attack deals base damage and clears defender preparation", () =>
   m.fighters.b.buffer = [{ sign: "rat", tick: 10 }];
   m.pendingAttacks.a = pending("a", "fire_1");
   const next = tickMatch(m);
-  assert.equal(next.fighters.b.hp, MAX_HP - 1);
+  assert.equal(next.fighters.b.hp, MAX_HP - 3);
   assert.deepEqual(next.fighters.b.buffer, []);
 });
 
@@ -293,7 +293,7 @@ test("rematch resets only after both players are ready", () => {
 
 // ── 6-7 special contest ─────────────────────────────────────────────
 
-test("five combined casts open the contest, once the last attack has landed", () => {
+test("the trigger count of combined casts opens the contest, once the last attack has landed", () => {
   let m = liveMatch();
   m.attacks = SPECIAL_TRIGGER_ATTACKS - 1;
   seedCast(m, "a", "fire_2");
@@ -306,12 +306,12 @@ test("five combined casts open the contest, once the last attack has landed", ()
 
   for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
   assert.equal(m.phase, "special");
-  assert.equal(m.fighters.b.hp, MAX_HP - 2, "the fifth attack still deals its damage");
+  assert.equal(m.fighters.b.hp, MAX_HP - 5, "the triggering attack still deals its damage");
   assert.deepEqual(m.special?.reps, { a: 0, b: 0 });
   assert.equal(m.attacks, 0, "the counter re-arms for the next contest");
 });
 
-test("a lethal fifth attack ends the match instead of opening the contest", () => {
+test("a lethal triggering attack ends the match instead of opening the contest", () => {
   let m = liveMatch();
   m.attacks = SPECIAL_TRIGGER_ATTACKS - 1;
   m.fighters.b = { ...m.fighters.b, hp: 2 };
@@ -415,14 +415,14 @@ test("the contest result rides along briefly, then clears", () => {
   assert.equal(m.phase, "live");
 });
 
-test("the contest re-arms every five casts rather than firing once", () => {
+test("the contest re-arms every trigger-count casts rather than firing once", () => {
   let m = contestMatch({ a: SPECIAL_TARGET_REPS, b: 0 });
   m = tickMatch(m);
   assert.equal(m.phase, "live");
 
   m.attacks = SPECIAL_TRIGGER_ATTACKS;
   m = tickMatch(m);
-  assert.equal(m.phase, "special", "a second contest opens after five more casts");
+  assert.equal(m.phase, "special", "a second contest opens after another trigger-count casts");
   assert.deepEqual(m.special?.reps, { a: 0, b: 0 });
   assert.equal(m.special?.winner, null);
 });

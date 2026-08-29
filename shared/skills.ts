@@ -15,7 +15,7 @@ export interface SkillDef {
   image: string | null;
 }
 
-const DAMAGE: Record<SkillLevel, number> = { 1: 1, 2: 2 };
+const DAMAGE: Record<SkillLevel, number> = { 1: 3, 2: 5 };
 
 /**
  * 3-seal base per element. Level 2 appends one "amp" seal.

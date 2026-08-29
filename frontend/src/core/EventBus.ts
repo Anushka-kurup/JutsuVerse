@@ -31,6 +31,7 @@ export const Events = {
   // ── network module ──
   NET_OPEN: "net-open",
   NET_JOINED: "net-joined", // ({ code: string, seat: Seat, peerPresent: boolean })
+  NET_NAMES: "net-names", // ({ me: string, opp: string }) — display names, opp "" until known
   NET_STATE: "net-state", // ({ me: FighterPublic, opp: FighterPublic, tick })
   NET_MATCH: "net-match", // ({ phase, winner })
   NET_ERROR: "net-error", // (message: string)

@@ -446,7 +446,7 @@ class OverlayController {
       this.skillCast.classList.remove("on");
       this.skillCast.hidden = true;
       this.skillCast.innerHTML = "";
-    }, 2000);
+    }, 3500);
 
     if (side === "me") {
       // cards are merged per element, so L1/L2 casts resolve to the group card
