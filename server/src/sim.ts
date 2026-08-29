@@ -198,6 +198,29 @@ export function blockAttack(f: Fighter): Fighter {
   };
 }
 
+/** Restore HP, capped at MAX_HP. Used by the 6-7 contest reward. */
+export function heal(f: Fighter, amount: number): Fighter {
+  return { ...f, hp: Math.min(MAX_HP, f.hp + amount) };
+}
+
+/**
+ * Drop everything transient — stance, seal buffer, live hold, shield timer —
+ * while keeping HP and remaining shields. Used when the 6-7 contest freezes
+ * combat, so nothing half-formed survives the interruption.
+ */
+export function calmFighter(f: Fighter): Fighter {
+  return {
+    ...f,
+    stance: "idle",
+    moveId: null,
+    stanceUntilTick: 0,
+    currentHold: null,
+    shieldUntilTick: 0,
+    buffer: [],
+    candidate: null,
+  };
+}
+
 export function takeDamage(
   f: Fighter,
   tick: number,

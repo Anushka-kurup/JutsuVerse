@@ -29,7 +29,15 @@ export const SEATS = ["a", "b"] as const;
 export type Seat = (typeof SEATS)[number];
 export const SeatSchema = z.enum(SEATS);
 
-export const PHASES = ["waiting", "connecting", "countdown", "live", "ended"] as const;
+export const PHASES = [
+  "waiting",
+  "connecting",
+  "countdown",
+  "live",
+  /** the 6-7 rep contest, triggered every SPECIAL_TRIGGER_ATTACKS casts */
+  "special",
+  "ended",
+] as const;
 export type Phase = (typeof PHASES)[number];
 
 export const STANCES = [
@@ -51,6 +59,18 @@ export const MAX_SHIELDS = 3;
 export const COUNTDOWN_TICKS = TICK_HZ * 4;
 export const CLASH_WINDOW_TICKS = TICK_HZ;
 export const SHIELD_MAX_TICKS = TICK_HZ * 10;
+
+// ── 6-7 special contest ─────────────────────────────────────────────
+/** Combined casts by BOTH fighters that trigger the contest. Resets each time. */
+export const SPECIAL_TRIGGER_ATTACKS = 5;
+/** Reps to win outright. One rep = one confirmed alternation (see lab/counter.ts). */
+export const SPECIAL_TARGET_REPS = 67;
+/** HP restored to the winner, clamped to MAX_HP. */
+export const SPECIAL_HEAL = 10;
+/** Hard cap; whoever leads on reps when it expires wins. Never let a match hang. */
+export const SPECIAL_MAX_TICKS = TICK_HZ * 60;
+/** How long the result banner keeps riding along after the contest resolves. */
+export const SPECIAL_BANNER_TICKS = TICK_HZ * 3;
 
 export const JoinMsg = z.object({
   type: z.literal("join"),
@@ -89,6 +109,19 @@ export const ReadyMsg = z.object({
   stage: z.enum(READY_STAGES).default("camera"),
   enabled: z.boolean().optional(),
 });
+/**
+ * Rep count during the 6-7 contest. The camera is on the client, so the count is
+ * detected there and reported here; the server only arbitrates who got to the
+ * target first. It clamps to monotonic growth, so a client cannot walk it back.
+ */
+export const RepsMsg = z.object({
+  type: z.literal("reps"),
+  seq: z.number().int().nonnegative(),
+  reps: z.number().int().nonnegative().max(10_000),
+  tClient: z.number(),
+});
+export type RepsMsg = z.infer<typeof RepsMsg>;
+
 export const LeaveMsg = z.object({ type: z.literal("leave") });
 
 export const ClientMsg = z.discriminatedUnion("type", [
@@ -96,6 +129,7 @@ export const ClientMsg = z.discriminatedUnion("type", [
   SignalMsg,
   InputMsg,
   HoldMsg,
+  RepsMsg,
   ReadyMsg,
   LeaveMsg,
 ]);
@@ -119,6 +153,18 @@ export const FighterPublicSchema = z.object({
 });
 export type FighterPublic = z.infer<typeof FighterPublicSchema>;
 
+/** The 6-7 contest as both clients see it. */
+export interface SpecialPublic {
+  reps: { a: number; b: number };
+  target: number;
+  /** ticks remaining before the cap expires; 0 once resolved */
+  ticksLeft: number;
+  /** null while running, then the seat that won (or a draw) */
+  winner: Seat | "draw" | null;
+  /** HP actually restored — 0 when the winner was already at full health */
+  healed: number;
+}
+
 export type ServerMsg =
   | {
       type: "joined";
@@ -141,5 +187,7 @@ export type ServerMsg =
       ready?: { a: boolean; b: boolean };
       /** 3, 2, 1, or 0 while the authoritative countdown is running. */
       countdown?: number | null;
+      /** present during the 6-7 contest and for a few ticks after it resolves */
+      special?: SpecialPublic;
     }
   | { type: "error"; code: string; message: string };

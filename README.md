@@ -27,7 +27,12 @@ rematches.
   signs.
 - Shield is signs `13, 12`; sign 12 must remain held. It lasts at most three
   seconds, blocks one attack for zero damage, and consumes one of three shields.
-- Special Stage is intentionally deferred.
+- Every five attacks by both players combined, combat freezes for the **6-7
+  contest**: both players perform the 6-7 gesture on camera and the first to 67
+  reps restores 10 HP (nothing happens if they are already at full health). A
+  60-second cap awards it to whoever leads, so a dropped camera cannot hang the
+  match; a tie heals no one. The counter re-arms, so it triggers again at ten
+  attacks, fifteen, and so on.
 
 The attack definitions and image paths live in `shared/skills.ts`. The 14 valid
 model classes (`0..13`) are mapped in `shared/handSigns.ts`; raw class 14 is an
@@ -40,6 +45,7 @@ packages/protocol/       Validated WebSocket messages and public state
 shared/                  Hand-sign and jutsu catalogues shared by client/server
 server/                  Authoritative TypeScript room and combat server
 frontend/                Phaser UI, YOLOX camera recognition, and WebRTC video
+frontend/src/lab/        MediaPipe 6-7 rep detection (its own lab page, reused in battle)
 backend/                 Legacy Python prototype (not used by root scripts)
 ```
 

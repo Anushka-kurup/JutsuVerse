@@ -3,11 +3,18 @@ import {
   type HoldMsg,
   type InputMsg,
   type ReadyMsg,
+  type RepsMsg,
   type Seat,
   type ServerMsg,
 } from "@jutsu/protocol";
 import type { RawData, WebSocket } from "ws";
-import { countdownValue, createMatch, markReady, publicState, receiveInput } from "./match.ts";
+import {
+  createMatch,
+  markReady,
+  matchStatePublic,
+  receiveInput,
+  receiveReps,
+} from "./match.ts";
 import {
   joinRoom,
   leaveSocket,
@@ -20,14 +27,7 @@ function send(ws: WebSocket, msg: ServerMsg): void {
 }
 
 function matchState(room: Room): ServerMsg {
-  return {
-    type: "match_state",
-    phase: room.match.phase,
-    winner: room.match.winner,
-    cam: room.match.cam,
-    ready: room.match.ready,
-    countdown: countdownValue(room.match),
-  };
+  return matchStatePublic(room.match);
 }
 
 function broadcast(room: Room, msg: ServerMsg, except?: Seat): void {
@@ -92,6 +92,9 @@ function dispatch(ws: WebSocket, msg: ClientMsg): void {
       return;
     case "hold":
       onInput(ws, msg);
+      return;
+    case "reps":
+      onReps(ws, msg);
       return;
     case "signal": {
       const loc = locationOf(ws);
@@ -161,6 +164,12 @@ function onInput(ws: WebSocket, msg: InputMsg | HoldMsg): void {
   const loc = locationOf(ws);
   if (!loc) return;
   loc.room.match = receiveInput(loc.room.match, loc.seat, msg);
+}
+
+function onReps(ws: WebSocket, msg: RepsMsg): void {
+  const loc = locationOf(ws);
+  if (!loc) return;
+  loc.room.match = receiveReps(loc.room.match, loc.seat, msg);
 }
 
 function onLeave(ws: WebSocket): void {

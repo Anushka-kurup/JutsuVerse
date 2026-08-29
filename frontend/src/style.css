@@ -1021,3 +1021,161 @@ body {
 #battle-log div {
   margin-bottom: 0.15rem;
 }
+
+/* ── 6-7 contest ─────────────────────────────────────────────────── */
+#contest {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(560px, 92vw);
+  padding: 1.1rem 1.4rem 1.3rem;
+  text-align: center;
+  border: 1px solid #6a4bd6;
+  border-radius: 14px;
+  background: rgba(9, 6, 20, 0.93);
+  box-shadow: 0 0 40px rgba(106, 75, 214, 0.35);
+  pointer-events: none;
+}
+
+#contest[hidden] {
+  display: none;
+}
+
+/* the contest replaces seal input entirely — get the seal furniture out of the way */
+#overlay.contest-mode #skill-dock,
+#overlay.contest-mode #skill-test,
+#overlay.contest-mode #seal-now,
+#overlay.contest-mode #seal-hud {
+  display: none;
+}
+
+.contest-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #c4a7ff;
+}
+
+.contest-hint {
+  margin: 0 0 0.9rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.contest-hint b {
+  color: var(--ink);
+}
+
+.contest-scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+}
+
+.contest-who {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.contest-reps {
+  display: block;
+  font-family: Impact, system-ui, sans-serif;
+  font-size: 3.2rem;
+  line-height: 1.05;
+  color: var(--ink);
+}
+
+.contest-side[data-side="me"] .contest-reps {
+  color: #7ee0ff;
+}
+
+.contest-reps.pop {
+  animation: contest-pop 200ms ease-out;
+}
+
+@keyframes contest-pop {
+  0% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.contest-bar {
+  height: 6px;
+  margin-top: 0.3rem;
+  border-radius: 3px;
+  background: #241c3d;
+  overflow: hidden;
+}
+
+.contest-bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: #6a4bd6;
+  transition: width 120ms linear;
+}
+
+.contest-side[data-side="me"] .contest-bar > i {
+  background: #4f9dff;
+}
+
+.contest-bar > i.done {
+  background: #4ade80;
+}
+
+.contest-clock {
+  margin: 0.8rem 0 0;
+  font-family: monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.contest-clock.urgent {
+  color: #ff5470;
+}
+
+.contest-status {
+  margin: 0.35rem 0 0;
+  min-height: 1.1em;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: transparent;
+}
+
+.contest-status.warn {
+  color: #ffb454;
+}
+
+.contest-result {
+  margin: 0.5rem 0 0;
+  font-family: Impact, system-ui, sans-serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.06em;
+}
+
+.contest-result[hidden] {
+  display: none;
+}
+
+.contest-result--me {
+  color: #4ade80;
+}
+
+.contest-result--opp {
+  color: #ff5470;
+}
+
+.contest-result--draw {
+  color: var(--muted);
+}

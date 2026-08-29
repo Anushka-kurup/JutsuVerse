@@ -13,6 +13,7 @@ export class GestureBridge {
   private readonly model = new YoloxHandSign();
   private raf = 0;
   private running = false;
+  private detecting = true;
   private busy = false;
   private lastRun = 0;
   private stream: MediaStream | null = null;
@@ -35,6 +36,7 @@ export class GestureBridge {
     await this.model.load();
     this.stream = await startCamera(this.video);
     this.running = true;
+    this.detecting = true;
     this.lastRun = 0;
     this.loop();
     return this.stream;
@@ -50,10 +52,28 @@ export class GestureBridge {
     bus.emit(Events.SIGN_LIVE, { id: null, score: 0 });
   }
 
+  /**
+   * Stop classifying seals while keeping the camera open. The 6-7 contest runs a
+   * different model on this same <video>, and the WebRTC call is using the same
+   * MediaStream — stopping the camera outright would black out the opponent's view.
+   */
+  pauseDetection(): void {
+    if (!this.detecting) return;
+    this.detecting = false;
+    drawDetection(this.overlay, this.video, null);
+    bus.emit(Events.SIGN_LIVE, { id: null, score: 0 });
+  }
+
+  resumeDetection(): void {
+    if (this.detecting) return;
+    this.detecting = true;
+    this.lastRun = 0;
+  }
+
   private loop = (): void => {
     if (!this.running) return;
     const now = performance.now();
-    if (!this.busy && now - this.lastRun >= DETECT_INTERVAL_MS) {
+    if (this.detecting && !this.busy && now - this.lastRun >= DETECT_INTERVAL_MS) {
       this.lastRun = now;
       this.busy = true;
       this.model

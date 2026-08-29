@@ -1,6 +1,27 @@
 import { bus, Events } from "../core/EventBus";
+import { TICK_HZ } from "../types";
 import { GameSocket } from "../net/wsClient";
-import type { ConnectOpts, Edge, FighterPublic, Seat, ServerMsg, Sign } from "../types";
+import type {
+  ConnectOpts,
+  Edge,
+  FighterPublic,
+  Seat,
+  ServerMsg,
+  Sign,
+  SpecialPublic,
+} from "../types";
+
+/** The 6-7 contest from the local player's point of view. */
+export interface SpecialView {
+  reps: { me: number; opp: number };
+  target: number;
+  /** whole seconds left on the contest cap; 0 once it has resolved */
+  secondsLeft: number;
+  /** null while the contest is running */
+  outcome: "me" | "opp" | "draw" | null;
+  /** HP the winner actually gained — 0 when they were already at full health */
+  healed: number;
+}
 
 /**
  * Game socket to the authoritative server (@jutsu/protocol). The connection
@@ -113,6 +134,7 @@ export class NetworkClient {
           cam: msg.cam,
           ready: msg.ready,
           countdown: msg.countdown ?? null,
+          special: msg.special ? this.viewSpecial(msg.special) : null,
         });
         break;
       case "error":
@@ -122,6 +144,32 @@ export class NetworkClient {
         bus.emit(Events.WEBRTC_SIGNAL, msg.payload);
         break;
     }
+  }
+
+  private viewSpecial(sp: SpecialPublic): SpecialView {
+    const iAmA = this.seat !== "b";
+    return {
+      reps: {
+        me: iAmA ? sp.reps.a : sp.reps.b,
+        opp: iAmA ? sp.reps.b : sp.reps.a,
+      },
+      target: sp.target,
+      secondsLeft: Math.ceil(sp.ticksLeft / TICK_HZ),
+      outcome:
+        sp.winner === null || this.seat === null
+          ? null
+          : sp.winner === "draw"
+            ? "draw"
+            : sp.winner === this.seat
+              ? "me"
+              : "opp",
+      healed: sp.healed,
+    };
+  }
+
+  /** My own 6-7 rep count during the contest. The server clamps it to monotonic. */
+  sendReps(reps: number): void {
+    this.sock.send({ type: "reps", seq: ++this.seq, reps, tClient: performance.now() });
   }
 
   /** send a confirmed seal to the server: down then up */
