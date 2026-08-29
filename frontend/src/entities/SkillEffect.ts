@@ -13,6 +13,8 @@ export interface ProjectileOpts {
   toX: number;
   toY: number;
   element: string;
+  skillId: string;
+  level: number;
   onArrive?: () => void;
 }
 
@@ -38,6 +40,16 @@ export class SkillEffect {
     orb.setBlendMode(Phaser.BlendModes.ADD);
     this.parts.push(glow, orb);
 
+    const textureKey = `jutsu-${opts.skillId}`;
+    const art = scene.textures.exists(textureKey)
+      ? scene.add
+          .image(opts.fromX, opts.fromY, textureKey)
+          .setDisplaySize(100 + opts.level * 24, 100 + opts.level * 24)
+          .setFlipX(dir > 0)
+          .setDepth(8)
+      : null;
+    if (art) this.parts.push(art);
+
     const trail = scene.add.particles(opts.fromX, opts.fromY, "disc", {
       follow: orb,
       speed: { min: 20, max: 90 },
@@ -53,16 +65,17 @@ export class SkillEffect {
     // slight upward arc across the arena
     const midY = (opts.fromY + opts.toY) / 2 - 46;
     scene.tweens.chain({
-      targets: [orb, glow],
+      targets: art ? [orb, glow, art] : [orb, glow],
       tweens: [
-        { x: (opts.fromX + opts.toX) / 2, y: midY, duration: 230, ease: "Sine.out" },
-        { x: opts.toX, y: opts.toY, duration: 210, ease: "Sine.in" },
+        { x: (opts.fromX + opts.toX) / 2, y: midY, duration: 460, ease: "Sine.out" },
+        { x: opts.toX, y: opts.toY, duration: 440, ease: "Sine.in" },
       ],
       onComplete: () => {
         trail.stop();
         this.burst(opts.toX, opts.toY, color);
         orb.destroy();
         glow.destroy();
+        art?.destroy();
         this.scene.cameras.main.shake(180, 0.009);
         opts.onArrive?.();
         scene.time.delayedCall(600, () => this.destroy());

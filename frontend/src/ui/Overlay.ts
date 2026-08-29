@@ -268,8 +268,8 @@ class OverlayController {
     this.sealHud.hidden = false;
     this.setSeals("me", []);
     this.setSeals("opp", []);
-    this.setLiveSign("me", "none");
-    this.setLiveSign("opp", "none");
+    this.setLiveSign("me", null);
+    this.setLiveSign("opp", null);
   }
   hideSealHud(): void {
     this.sealHud.hidden = true;
@@ -280,16 +280,20 @@ class OverlayController {
     this.rows[side].seals.innerHTML = ids.map((id) => sealTextHtml(id)).join("");
   }
 
-  setLiveSign(side: Side, id: string): void {
-    const known = id && id !== "none" && Boolean(signById(id));
+  setLiveSign(side: Side, id: string | null): void {
+    const known = id !== null && Boolean(signById(id));
     this.rows[side].live.innerHTML = known ? sealTextHtml(id, "seal-cell--live") : "";
   }
 
   /** a skill was cast → big centre banner with its image for 3 seconds */
   flashSkill(side: Side, skillId: string): void {
-    if (!skillById(skillId)) return;
+    const skill = skillById(skillId);
+    if (!skill) return;
     const who = side === "me" ? "YOU" : "OPP";
-    this.skillCast.innerHTML = `<span class="skill-cast-who skill-cast-who--${side}">${who} CAST</span>`;
+    const art = skill.image
+      ? `<img class="skill-cast-art" src="${import.meta.env.BASE_URL}${skill.image}" alt="${skill.name}">`
+      : "";
+    this.skillCast.innerHTML = `${art}<span class="skill-cast-who skill-cast-who--${side}">${who} CAST ${skill.name.toUpperCase()}</span>`;
     this.skillCast.hidden = false;
     // force reflow so the .on transition replays on rapid re-casts
     void this.skillCast.offsetWidth;
@@ -388,7 +392,7 @@ class OverlayController {
     this.sealNow.hidden = true;
   }
   setSealNow(id: string | null, score: number): void {
-    const s = id && id !== "none" ? signById(id) : undefined;
+    const s = id ? signById(id) : undefined;
     this.sealNow.querySelector(".seal-now-img")!.innerHTML = s
       ? sealHtml(id!, "seal-cell--now")
       : `<span class="seal-cell seal-cell--now seal-cell--empty"><b>—</b></span>`;

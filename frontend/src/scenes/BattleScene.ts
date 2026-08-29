@@ -34,11 +34,12 @@ export class BattleScene extends Phaser.Scene {
 
   /** false until the 3·2·1 countdown finishes — gates all input */
   private started = false;
-  private counting = false;
   /** camera enabled locally (gate 1) */
   private camReadied = false;
   /** START pressed locally (gate 2) */
   private startPressed = false;
+  private countdownLabel?: Phaser.GameObjects.Text;
+  private countdownValue: number | null = null;
 
   constructor() {
     super("Battle");
@@ -46,9 +47,9 @@ export class BattleScene extends Phaser.Scene {
 
   create(): void {
     this.started = false;
-    this.counting = false;
     this.camReadied = false;
     this.startPressed = false;
+    this.countdownValue = null;
     new BackgroundLayer(this);
 
     this.preview = new CameraPreview(Overlay.cameraRoot, () => this.toggleCamera());
@@ -129,9 +130,10 @@ export class BattleScene extends Phaser.Scene {
   // ── gesture ──
   private onSignLive(d: { id: string | null; score: number }): void {
     this.matcher.feed(d.id);
+    if (this.started) net.setHeldSign(d.id);
     this.preview.setSign(d.id, d.score);
     Overlay.setSealNow(d.id, d.score);
-    Overlay.setLiveSign("me", d.id ?? "none");
+    Overlay.setLiveSign("me", d.id);
   }
 
   private onSealConfirmed(id: string): void {
@@ -151,12 +153,14 @@ export class BattleScene extends Phaser.Scene {
   private onOppSeals(ids: string[]): void {
     Overlay.setSeals("opp", ids);
   }
-  private onOppSign(id: string): void {
+  private onOppSign(id: string | null): void {
     Overlay.setLiveSign("opp", id);
   }
 
   private async toggleCamera(): Promise<void> {
     if (this.bridge.active) {
+      net.setHeldSign(null);
+      if (!this.started) net.cameraReady(false);
       this.bridge.stop();
       this.videoCall.setLocalStream(null);
       this.preview.setEnabled(false);
@@ -182,7 +186,11 @@ export class BattleScene extends Phaser.Scene {
     this.sync.apply(s);
   }
 
-  private onNetMatch(m: { phase: Phase; winner: Seat | "draw" | null }): void {
+  private onNetMatch(m: {
+    phase: Phase;
+    winner: Seat | "draw" | null;
+    countdown?: number | null;
+  }): void {
     if (m.phase === "connecting") {
       // gate 1 done (both cameras on) → gate 2: both players press START
       Overlay.hidePrep();
@@ -192,15 +200,19 @@ export class BattleScene extends Phaser.Scene {
           net.startReady();
         });
       }
-    } else if (m.phase === "live" && !this.started && !this.counting) {
-      // both players pressed START → run the 3·2·1
-      this.counting = true;
+    } else if (m.phase === "countdown") {
+      // The server owns the countdown, so both clients render the same value.
+      this.started = false;
       Overlay.hidePrep();
       Overlay.hideStartGate();
-      this.runCountdown();
+      this.showCountdown(m.countdown ?? 3);
+    } else if (m.phase === "live" && !this.started) {
+      this.countdownLabel?.destroy();
+      this.countdownLabel = undefined;
+      this.countdownValue = null;
+      this.started = true;
     } else if (m.phase === "ended") {
       this.started = false;
-      this.counting = false;
       this.startPressed = false;
       this.matcher.reset();
       const iWon = m.winner !== "draw" && m.winner === net.mySeat;
@@ -208,40 +220,29 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private runCountdown(): void {
+  private showCountdown(value: number): void {
+    if (value === this.countdownValue) return;
+    this.countdownValue = value;
+    this.countdownLabel?.destroy();
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2 - 30;
-    const steps = ["3", "2", "1", "GO!"];
-    let i = 0;
-    const tick = (): void => {
-      const last = i === steps.length - 1;
-      const label = this.add
-        .text(cx, cy, steps[i], {
-          fontFamily: "Impact, system-ui, sans-serif",
-          fontSize: last ? "108px" : "132px",
-          color: last ? "#4ade80" : "#ffd166",
-          stroke: "#05070c",
-          strokeThickness: 8,
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(1000);
-      this.tweens.add({
-        targets: label,
-        scale: { from: 1.7, to: 1 },
-        alpha: { from: 1, to: 0 },
-        duration: 850,
-        ease: "Quad.out",
-        onComplete: () => label.destroy(),
-      });
-      i += 1;
-      if (i < steps.length) this.time.delayedCall(1000, tick);
-      else this.time.delayedCall(650, () => {
-        this.started = true;
-        this.counting = false;
-      });
-    };
-    tick();
+    this.countdownLabel = this.add
+      .text(cx, cy, String(value), {
+        fontFamily: "Impact, system-ui, sans-serif",
+        fontSize: "132px",
+        color: value === 0 ? "#4ade80" : "#ffd166",
+        stroke: "#05070c",
+        strokeThickness: 8,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1000);
+    this.tweens.add({
+      targets: this.countdownLabel,
+      scale: { from: 1.7, to: 1 },
+      duration: 300,
+      ease: "Quad.out",
+    });
   }
 
   private onNetError(msg: string): void {
@@ -272,6 +273,7 @@ export class BattleScene extends Phaser.Scene {
     this.input.keyboard?.off("keydown-G", this.toggleGuide, this);
 
     this.bridge.stop();
+    this.countdownLabel?.destroy();
     this.videoCall.destroy();
     this.preview.destroy();
     this.me.destroy();

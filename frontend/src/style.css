@@ -536,6 +536,13 @@ body {
   color: #fff;
 }
 
+.skill-cast-art {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(255, 209, 102, 0.7));
+}
+
 .skill-cast-who--me {
   background: rgba(79, 125, 255, 0.95);
 }
@@ -743,6 +750,10 @@ body {
   border-color: rgba(177, 107, 255, 0.5);
 }
 .skill-tag--protect {
+  color: #35d0ba;
+  border-color: rgba(53, 208, 186, 0.5);
+}
+.skill-tag--shield {
   color: #35d0ba;
   border-color: rgba(53, 208, 186, 0.5);
 }

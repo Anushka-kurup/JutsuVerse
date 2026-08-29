@@ -105,7 +105,9 @@ export function locationOf(
 }
 
 export function liveRooms(): Room[] {
-  return [...rooms.values()].filter((r) => r.match.phase === "live");
+  return [...rooms.values()].filter(
+    (r) => r.match.phase === "countdown" || r.match.phase === "live",
+  );
 }
 
 export function destroyRoom(code: string): void {

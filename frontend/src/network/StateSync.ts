@@ -54,7 +54,7 @@ export class StateSync {
       this.oppSealsKey = oppKey;
       bus.emit(Events.OPP_SEALS, [...opp.buffer]);
     }
-    bus.emit(Events.OPP_SIGN, opp.held[opp.held.length - 1] ?? "none");
+    bus.emit(Events.OPP_SIGN, opp.held[opp.held.length - 1] ?? null);
 
     // ── skill fired (server set lastSkillTick this frame) ──
     if (me.lastSkill && (!prev || me.lastSkillTick > prev.me.lastSkillTick)) {
@@ -100,6 +100,8 @@ export class StateSync {
         toX: to.x,
         toY: to.y - CHEST_DY,
         element: skill.element,
+        skillId: skill.id,
+        level: skill.level ?? 1,
       });
     } else {
       char.pulseDefense("PROTECT");

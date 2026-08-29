@@ -1,68 +1,72 @@
-/**
- * The five jutsu. Every attack is a 3-seal combo; the one defensive jutsu
- * (Clone) is a quick 2-seal.
- *
- * `action` / `element` feed the server's combat engine:
- *   ATTACK + element → damage
- *   PROTECT          → block the next hit
- */
-export type SkillAction = "ATTACK" | "REFLECT" | "PROTECT";
+export type SkillAction = "ATTACK" | "SHIELD";
 export type SkillElement = "FIRE" | "WATER" | "WIND" | "EARTH";
+export type SkillLevel = 1 | 2 | 3;
 
 export interface SkillDef {
   id: string;
-  name: string; // english
-  nameJa: string; // 漢字
-  seals: string[]; // hand-sign ids, in cast order (length 3–5)
+  name: string;
+  nameJa: string;
+  seals: string[];
   action: SkillAction;
   element: SkillElement | null;
+  level: SkillLevel | null;
+  damage: number;
+  /** Path below frontend/public (attack skills only). */
+  image: string | null;
+}
+
+const DAMAGE: Record<SkillLevel, number> = { 1: 1, 2: 2, 3: 4 };
+
+const attack = (
+  element: SkillElement,
+  level: SkillLevel,
+  seals: string[],
+): SkillDef => ({
+  id: `${element.toLowerCase()}_${level}`,
+  name: `${title(element)} Attack · Level ${level}`,
+  nameJa: element,
+  seals,
+  action: "ATTACK",
+  element,
+  level,
+  damage: DAMAGE[level],
+  image: `img/ninjutsu/${title(element)}/${title(element)}${level}.png`,
+});
+
+function title(element: SkillElement): string {
+  return element[0] + element.slice(1).toLowerCase();
 }
 
 export const SKILLS: SkillDef[] = [
+  attack("FIRE", 1, ["rat", "ox", "tiger"]),
+  attack("FIRE", 2, ["rat", "ox", "tiger", "mizunoe"]),
+  attack("FIRE", 3, ["rat", "ox", "tiger", "mizunoe", "gassho"]),
+
+  attack("WIND", 1, ["hare", "dragon", "snake"]),
+  attack("WIND", 2, ["hare", "dragon", "snake", "mizunoe"]),
+  attack("WIND", 3, ["hare", "dragon", "snake", "mizunoe", "gassho"]),
+
+  attack("EARTH", 1, ["horse", "ram", "monkey"]),
+  attack("EARTH", 2, ["horse", "ram", "monkey", "mizunoe"]),
+  attack("EARTH", 3, ["horse", "ram", "monkey", "mizunoe", "gassho"]),
+
+  attack("WATER", 1, ["bird", "dog", "boar"]),
+  attack("WATER", 2, ["bird", "dog", "boar", "mizunoe"]),
+  attack("WATER", 3, ["bird", "dog", "boar", "mizunoe", "gassho"]),
+
   {
-    id: "clone",
-    name: "Clone Jutsu",
-    nameJa: "分身の術",
-    seals: ["ram", "snake"],
-    action: "PROTECT", // decoys soak the next hit — quick 2-seal defence
+    id: "shield",
+    name: "Shield",
+    nameJa: "SHIELD",
+    seals: ["gassho", "mizunoe"],
+    action: "SHIELD",
     element: null,
-  },
-  {
-    id: "fireball",
-    name: "Fireball Jutsu",
-    nameJa: "火遁・豪火球の術",
-    seals: ["snake", "tiger", "horse"],
-    action: "ATTACK",
-    element: "FIRE",
-  },
-  {
-    id: "water_trumpet",
-    name: "Water Trumpet",
-    nameJa: "水喇叭",
-    seals: ["dragon", "tiger", "hare"],
-    action: "ATTACK",
-    element: "WATER",
-  },
-  {
-    id: "great_breakthrough",
-    name: "Great Breakthrough",
-    nameJa: "風遁・大突破",
-    seals: ["tiger", "dog", "horse"],
-    action: "ATTACK",
-    element: "WIND",
-  },
-  {
-    id: "earth_dragon",
-    name: "Earth Dragon Bullet",
-    nameJa: "土遁・土龍弾",
-    seals: ["boar", "ox", "dragon"],
-    action: "ATTACK",
-    element: "EARTH",
+    level: null,
+    damage: 0,
+    image: null,
   },
 ];
 
 const BY_ID = new Map(SKILLS.map((s) => [s.id, s]));
 export const skillById = (id: string): SkillDef | undefined => BY_ID.get(id);
-
-/** longest skill sequence — how many committed seals the matcher needs to keep */
 export const MAX_SEAL_SEQUENCE = Math.max(...SKILLS.map((s) => s.seals.length));

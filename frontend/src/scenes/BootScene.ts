@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { SKILLS } from "../types";
 
 /**
  * Spec §4.3 BootScene. Loads the fighter art and bakes a couple of helper
@@ -16,6 +17,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image("char-me-raw", `${BASE}assets/chars/me.png`);
     this.load.image("char-opp-raw", `${BASE}assets/chars/opp.png`);
     this.load.image("bg-arena", `${BASE}assets/backgrounds/arena.png`);
+    for (const skill of SKILLS) {
+      if (skill.image) this.load.image(`jutsu-${skill.id}`, `${BASE}${skill.image}`);
+    }
   }
 
   create(): void {
