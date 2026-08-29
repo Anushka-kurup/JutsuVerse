@@ -3,6 +3,7 @@ import { WebSocket } from "ws";
 import { createMatch, type MatchSession } from "./match.ts";
 
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const CODE_LENGTH = 3;
 
 export interface Player {
   id: string;
@@ -25,7 +26,7 @@ const bySocket = new Map<WebSocket, { room: Room; seat: Seat }>();
 function generateCode(): string {
   for (let attempt = 0; attempt < 20; attempt++) {
     let code = "";
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < CODE_LENGTH; i++) {
       code += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
     }
     if (!rooms.has(code)) return code;

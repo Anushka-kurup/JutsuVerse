@@ -216,10 +216,11 @@ export class NetworkClient {
   }
 }
 
-// keep in sync with @jutsu/protocol SIGNS
+// castable seals the client may send. Subset of @jutsu/protocol SIGNS —
+// `mizunoe` (壬) is intentionally omitted: the detector can't recognise it.
 const SIGN_SET = new Set([
   "rat", "ox", "tiger", "hare", "dragon", "snake", "horse",
-  "ram", "monkey", "bird", "dog", "boar", "mizunoe", "gassho",
+  "ram", "monkey", "bird", "dog", "boar", "gassho",
 ]);
 function isSign(s: string): s is Sign {
   return SIGN_SET.has(s);

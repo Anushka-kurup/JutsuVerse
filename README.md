@@ -7,7 +7,7 @@ rematches.
 
 ## Game flow
 
-1. Create a room or join with its six-character code.
+1. Create a room or join with its three-character code.
 2. Both players enable their cameras.
 3. Both players press **Start**.
 4. The server runs the synchronized `3 → 2 → 1 → 0` countdown.
@@ -21,8 +21,9 @@ rematches.
 - Level 1 uses three signs and deals 1 base damage.
 - Level 2 adds sign 12 and deals 2 base damage.
 - Level 3 adds signs 12 and 13 and deals 4 base damage.
-- Attacks performed within one second clash. Elemental advantage deals 15;
-  otherwise the higher level deals the difference between base damages.
+- Attacks performed within one second clash. Elemental advantage deals the
+  winner's base damage and the winner takes none; otherwise both attacks land
+  for their own base damage.
 - An unopposed attack deals its base damage and clears the defender's stored
   signs.
 - Shield is signs `13, 12`; sign 12 must remain held. It lasts at most three
@@ -46,7 +47,6 @@ shared/                  Hand-sign and jutsu catalogues shared by client/server
 server/                  Authoritative TypeScript room and combat server
 frontend/                Phaser UI, YOLOX camera recognition, and WebRTC video
 frontend/src/lab/        MediaPipe 6-7 rep detection (its own lab page, reused in battle)
-backend/                 Legacy Python prototype (not used by root scripts)
 ```
 
 ## Run locally

@@ -19,6 +19,9 @@ import {
   type BufferEvent,
 } from "./commands.ts";
 
+/** Seal you must keep held to sustain the shield (last seal of the shield sequence). */
+const SHIELD_HOLD_SIGN: Sign = SHIELD.seq[SHIELD.seq.length - 1];
+
 const BUFFER_TICKS = TICK_HZ * 40;
 const MAX_BUFFERED_SIGNS = 5;
 const LEVEL_FINALIZE_TICKS = TICK_HZ;
@@ -94,7 +97,7 @@ export function stepFighter(f: Fighter, tick: number, canAttack = true): Fighter
   }
 
   if (next.stance === "block") {
-    if (next.currentHold !== "mizunoe" || tick >= next.shieldUntilTick) {
+    if (next.currentHold !== SHIELD_HOLD_SIGN || tick >= next.shieldUntilTick) {
       next = {
         ...next,
         stance: "idle",
@@ -108,7 +111,7 @@ export function stepFighter(f: Fighter, tick: number, canAttack = true): Fighter
 
   if (
     next.shields > 0 &&
-    next.currentHold === "mizunoe" &&
+    next.currentHold === SHIELD_HOLD_SIGN &&
     matchesShield(next.buffer)
   ) {
     next = {

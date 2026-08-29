@@ -26,7 +26,6 @@ class OverlayController {
   private skillPanel!: HTMLElement;
   private skillCast!: HTMLElement;
   private skillTest!: HTMLElement;
-  private sealNow!: HTMLElement;
   private skillCastTimer = 0;
   private debugEl!: HTMLElement;
   private sealGuide!: HTMLElement;
@@ -44,7 +43,7 @@ class OverlayController {
           <label>Your name <input name="player" value="${session.player}" maxlength="24" autocomplete="off" /></label>
           <button type="submit" data-act="create">Create room</button>
           <div class="menu-or">— or —</div>
-          <label>Room code <input name="room" value="" placeholder="leave blank to create" maxlength="8" autocomplete="off" spellcheck="false" /></label>
+          <label>Room code <input name="room" value="" placeholder="leave blank to create" maxlength="3" autocomplete="off" spellcheck="false" /></label>
           <button type="button" data-act="join">Join room</button>
           <div class="menu-error"></div>
           <div class="jutsu-key">${this.jutsuKeyHtml()}</div>
@@ -52,7 +51,7 @@ class OverlayController {
         <div id="lobby" hidden>
           <h1>忍 JUTSUVERSE</h1>
           <p class="lobby-label">ROOM CODE</p>
-          <p class="lobby-code">······</p>
+          <p class="lobby-code">···</p>
           <p class="lobby-status">Creating room…</p>
           <button type="button" class="lobby-cancel">Cancel</button>
         </div>
@@ -91,11 +90,6 @@ class OverlayController {
         </div>
         <div id="skill-cast" hidden></div>
         <div id="skill-test" hidden></div>
-        <div id="seal-now" hidden>
-          <span class="seal-now-label">DETECTED</span>
-          <span class="seal-now-img"></span>
-          <span class="seal-now-name">—</span>
-        </div>
         <pre id="detect-debug" hidden></pre>
         <div id="battle-log" hidden></div>
         <div id="seal-guide" hidden>
@@ -128,7 +122,6 @@ class OverlayController {
     this.skillPanel = this.app.querySelector("#skill-dock")!;
     this.skillCast = this.app.querySelector("#skill-cast")!;
     this.skillTest = this.app.querySelector("#skill-test")!;
-    this.sealNow = this.app.querySelector("#seal-now")!;
     this.debugEl = this.app.querySelector("#detect-debug")!;
     this.sealGuide = this.app.querySelector("#seal-guide")!;
     this.logEl = this.app.querySelector("#battle-log")!;
@@ -184,7 +177,7 @@ class OverlayController {
   showLobby(code: string, peerPresent: boolean): void {
     this.menu.hidden = true;
     this.lobby.hidden = false;
-    this.lobby.querySelector(".lobby-code")!.textContent = code || "······";
+    this.lobby.querySelector(".lobby-code")!.textContent = code || "···";
     this.setLobbyStatus(
       peerPresent ? "Opponent found — starting…" : "Waiting for opponent to join…",
     );
@@ -485,25 +478,6 @@ class OverlayController {
   }
   get debugVisible(): boolean {
     return !this.debugEl.hidden;
-  }
-
-  // ── big "currently detected" seal box — shows the existing seal PNG, enlarged ──
-  showSealNow(): void {
-    this.sealNow.hidden = false;
-    this.setSealNow(null, 0);
-  }
-  hideSealNow(): void {
-    this.sealNow.hidden = true;
-  }
-  setSealNow(id: string | null, score: number): void {
-    const s = id ? signById(id) : undefined;
-    this.sealNow.querySelector(".seal-now-img")!.innerHTML = s
-      ? sealHtml(id!, "seal-cell--now")
-      : `<span class="seal-cell seal-cell--now seal-cell--empty"><b>—</b></span>`;
-    this.sealNow.querySelector(".seal-now-name")!.textContent = s
-      ? `${s.en} · ${s.kanji}   ${Math.round(score * 100)}%`
-      : "—";
-    this.sealNow.classList.toggle("on", Boolean(s));
   }
 
   // ── rolling battle log ──

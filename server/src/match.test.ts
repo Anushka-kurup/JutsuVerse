@@ -9,7 +9,10 @@ import {
   SPECIAL_TRIGGER_ATTACKS,
   type Seat,
 } from "@jutsu/protocol";
-import { ATTACKS, attackById } from "./commands.ts";
+import { ATTACKS, attackById, SHIELD } from "./commands.ts";
+
+/** last seal of the shield sequence — the seal that must stay held (was 壬). */
+const SHIELD_HOLD = SHIELD.seq[SHIELD.seq.length - 1];
 import {
   countdownValue,
   createMatch,
@@ -90,12 +93,16 @@ test("defines all elemental levels with the requested damage", () => {
     assert.equal(attackById(`${element}_2`)?.seq.length, 4);
     assert.equal(attackById(`${element}_3`)?.seq.length, 5);
     assert.deepEqual(attackById(`${element}_1`)?.seq, bases[element]);
-    assert.deepEqual(attackById(`${element}_2`)?.seq, [...bases[element], "mizunoe"]);
-    assert.deepEqual(attackById(`${element}_3`)?.seq, [
-      ...bases[element],
-      "mizunoe",
-      "gassho",
-    ]);
+    // L2 = base + one amp seal; L3 = base + same amp seal + 祈 Gassho.
+    const l2 = attackById(`${element}_2`)!.seq;
+    const l3 = attackById(`${element}_3`)!.seq;
+    assert.deepEqual(l2.slice(0, 3), bases[element]);
+    assert.deepEqual(l3.slice(0, 4), l2);
+    assert.equal(l3[4], "gassho");
+    assert.ok(
+      !(bases[element] as readonly string[]).includes(l2[3]),
+      "amp seal is not part of the base",
+    );
   }
 });
 
@@ -107,30 +114,41 @@ test("elemental counter wins a clash regardless of level", () => {
   };
   const next = tickMatch(m);
   assert.equal(next.fighters.a.hp, MAX_HP);
-  assert.equal(next.fighters.b.hp, MAX_HP - 15);
+  assert.equal(next.fighters.b.hp, MAX_HP - 1);
   assert.deepEqual(next.pendingAttacks, { a: null, b: null });
 });
 
-test("opposite elements use the base-damage difference", () => {
+test("higher-level counter deals its own damage and takes none", () => {
+  const m = liveMatch();
+  m.pendingAttacks = {
+    a: pending("a", "fire_3"),
+    b: pending("b", "wind_1"),
+  };
+  const next = tickMatch(m);
+  assert.equal(next.fighters.a.hp, MAX_HP);
+  assert.equal(next.fighters.b.hp, MAX_HP - 4);
+});
+
+test("opposite elements both land their own damage", () => {
   const m = liveMatch();
   m.pendingAttacks = {
     a: pending("a", "fire_1"),
     b: pending("b", "earth_3"),
   };
   const next = tickMatch(m);
-  assert.equal(next.fighters.a.hp, MAX_HP - 3);
-  assert.equal(next.fighters.b.hp, MAX_HP);
+  assert.equal(next.fighters.a.hp, MAX_HP - 4);
+  assert.equal(next.fighters.b.hp, MAX_HP - 1);
 });
 
-test("equal-level non-countering attacks deal no damage", () => {
+test("equal-level non-countering attacks both land", () => {
   const m = liveMatch();
   m.pendingAttacks = {
     a: pending("a", "fire_2"),
     b: pending("b", "earth_2"),
   };
   const next = tickMatch(m);
-  assert.equal(next.fighters.a.hp, MAX_HP);
-  assert.equal(next.fighters.b.hp, MAX_HP);
+  assert.equal(next.fighters.a.hp, MAX_HP - 2);
+  assert.equal(next.fighters.b.hp, MAX_HP - 2);
 });
 
 test("one-second clash window is inclusive and rejects later attacks", () => {
@@ -140,7 +158,8 @@ test("one-second clash window is inclusive and rejects later attacks", () => {
     b: pending("b", "wind_1", 20, 40),
   };
   const clashed = tickMatch(inside);
-  assert.equal(clashed.fighters.b.hp, MAX_HP - 15);
+  assert.equal(clashed.fighters.a.hp, MAX_HP);
+  assert.equal(clashed.fighters.b.hp, MAX_HP - 1);
 
   const outside = { ...liveMatch(), tick: 19 };
   outside.pendingAttacks = {
@@ -167,7 +186,7 @@ test("maintained shield blocks all damage and consumes one shield", () => {
     ...m.fighters.b,
     stance: "block",
     moveId: "shield",
-    currentHold: "mizunoe",
+    currentHold: SHIELD_HOLD,
     shieldUntilTick: 60,
   };
   m.pendingAttacks.a = pending("a", "fire_3");
@@ -177,10 +196,10 @@ test("maintained shield blocks all damage and consumes one shield", () => {
   assert.equal(next.fighters.b.stance, "idle");
 });
 
-test("shield sequence is 13 then 12 and requires sign 12 to remain held", () => {
-  let fighter = applyHold(createMatch().fighters.a, "mizunoe");
+test("shield sequence is gassho then hold-seal and requires the hold-seal to remain held", () => {
+  let fighter = applyHold(createMatch().fighters.a, SHIELD_HOLD);
   fighter = applyEdge(fighter, "gassho", "down", 1);
-  fighter = applyEdge(fighter, "mizunoe", "down", 2);
+  fighter = applyEdge(fighter, SHIELD_HOLD, "down", 2);
   const active = stepFighter(fighter, 2).fighter;
   assert.equal(active.stance, "block");
 

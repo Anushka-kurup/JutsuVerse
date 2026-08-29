@@ -302,6 +302,7 @@ body {
   z-index: 4;
 }
 
+/* both feeds share the base `top` so they stay horizontally aligned */
 .cam-window--local {
   left: 10px;
 }
@@ -600,56 +601,6 @@ body {
 .seal-flash.on {
   opacity: 1;
   transform: scale(1);
-}
-
-/* ── big "currently detected" seal box (bottom-right) — my existing seal PNG, enlarged ── */
-#seal-now {
-  position: absolute;
-  right: 14px;
-  bottom: calc(var(--dock-h) + 14px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px 14px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(7, 10, 17, 0.82);
-  z-index: 5;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
-}
-
-#seal-now[hidden] {
-  display: none;
-}
-
-#seal-now.on {
-  border-color: var(--accent);
-  box-shadow: 0 0 16px rgba(79, 125, 255, 0.45);
-}
-
-.seal-now-label {
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  color: var(--muted);
-}
-
-.seal-cell--now {
-  width: clamp(150px, 22vh, 260px);
-  height: clamp(150px, 22vh, 260px);
-  border-radius: 14px;
-  font-size: 6rem;
-}
-
-.seal-cell--now img {
-  transform: scale(1.7); /* crop tighter to the hands in the big box */
-}
-
-.seal-now-name {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--ink);
 }
 
 /* ── jutsu dock: full-width strip across the bottom third ────────── */
