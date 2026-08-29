@@ -14,6 +14,8 @@ export interface ProjectileOpts {
   element: string;
   skillId: string;
   level: number;
+  /** Launch size for the art, in px — set to whatever the charge grew to. */
+  artSize?: number;
   onArrive?: () => void;
 }
 
@@ -40,10 +42,11 @@ export class SkillEffect {
     this.parts.push(glow, orb);
 
     const textureKey = `jutsu-${opts.skillId}`;
+    const artSize = opts.artSize ?? 100 + opts.level * 24;
     const art = scene.textures.exists(textureKey)
       ? scene.add
           .image(opts.fromX, opts.fromY, textureKey)
-          .setDisplaySize(100 + opts.level * 24, 100 + opts.level * 24)
+          .setDisplaySize(artSize, artSize)
           .setFlipX(dir > 0)
           .setDepth(8)
       : null;

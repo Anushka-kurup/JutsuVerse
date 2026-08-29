@@ -104,7 +104,14 @@ export class StateSync {
       const facing: 1 | -1 = side === "me" ? 1 : -1;
       this.fx.charge(
         side,
-        { x: at.x, y: at.y - CHEST_DY, element: skill.element, skillId: skill.id, facing },
+        {
+          x: at.x,
+          y: at.y - CHEST_DY,
+          element: skill.element,
+          skillId: skill.id,
+          facing,
+          withGlow: (skill.level ?? 1) >= 2, // the element glow behind is Level 2 only
+        },
         buffer.length,
         skill.seals.length,
       );
@@ -123,7 +130,8 @@ export class StateSync {
       // flight and its tail lands on the hit
       sfx.play(skill.element.toLowerCase());
       char.cast(skill.element);
-      this.fx.releaseCharge(side);
+      // throw as many copies, at the size, as the charge held
+      const { artSize, count } = this.fx.releaseCharge(side);
       const from = side === "me" ? SPAWN.me : SPAWN.opp;
       const to = side === "me" ? SPAWN.opp : SPAWN.me;
       const level = skill.level ?? 1;
@@ -136,8 +144,9 @@ export class StateSync {
           element: skill.element,
           skillId: skill.id,
           level,
+          artSize,
         },
-        level, // level 1/2 → 1/2 projectiles
+        count || level,
       );
     } else {
       this.fx.clearCharge(side);
