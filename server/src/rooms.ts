@@ -108,9 +108,10 @@ export function locationOf(
 export function liveRooms(): Room[] {
   return [...rooms.values()].filter(
     (r) =>
-      r.match.phase === "countdown" ||
+      r.match.phase === "memegate" ||
       r.match.phase === "live" ||
-      r.match.phase === "special",
+      r.match.phase === "special" ||
+      r.match.phase === "memerace",
   );
 }
 

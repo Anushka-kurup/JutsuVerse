@@ -5,6 +5,7 @@ import type {
   ConnectOpts,
   Edge,
   FighterPublic,
+  MemeChallengePublic,
   Seat,
   ServerMsg,
   Sign,
@@ -20,6 +21,17 @@ export interface SpecialView {
   /** null while the contest is running */
   outcome: "me" | "opp" | "draw" | null;
   /** HP the winner actually gained — 0 when they were already at full health */
+  healed: number;
+}
+
+/** A meme-gesture challenge (memegate or memerace) from the local player's point of view. */
+export interface MemeChallengeView {
+  label: string;
+  /** whole seconds left before the hard cap; 0 once it has resolved */
+  secondsLeft: number;
+  done: { me: boolean; opp: boolean };
+  /** null while running; only memerace can end in a "draw" (a timeout) */
+  outcome: "me" | "opp" | "draw" | null;
   healed: number;
 }
 
@@ -140,8 +152,8 @@ export class NetworkClient {
           winner: msg.winner ?? null,
           cam: msg.cam,
           ready: msg.ready,
-          countdown: msg.countdown ?? null,
           special: msg.special ? this.viewSpecial(msg.special) : null,
+          memeChallenge: msg.memeChallenge ? this.viewMemeChallenge(msg.memeChallenge) : null,
         });
         break;
       case "error":
@@ -174,9 +186,32 @@ export class NetworkClient {
     };
   }
 
+  private viewMemeChallenge(mc: MemeChallengePublic): MemeChallengeView {
+    const iAmA = this.seat !== "b";
+    return {
+      label: mc.label,
+      secondsLeft: Math.ceil(mc.ticksLeft / TICK_HZ),
+      done: { me: iAmA ? mc.done.a : mc.done.b, opp: iAmA ? mc.done.b : mc.done.a },
+      outcome:
+        mc.winner === null || this.seat === null
+          ? null
+          : mc.winner === "draw"
+            ? "draw"
+            : mc.winner === this.seat
+              ? "me"
+              : "opp",
+      healed: mc.healed,
+    };
+  }
+
   /** My own 6-7 rep count during the contest. The server clamps it to monotonic. */
   sendReps(reps: number): void {
     this.sock.send({ type: "reps", seq: ++this.seq, reps, tClient: performance.now() });
+  }
+
+  /** I performed `label` — the server checks it against the active memegate/memerace target. */
+  sendMeme(label: string): void {
+    this.sock.send({ type: "meme", seq: ++this.seq, label });
   }
 
   /** send a confirmed seal to the server: down then up */

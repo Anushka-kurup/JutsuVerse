@@ -1,6 +1,6 @@
 import { bus, Events } from "../core/EventBus";
 import { session } from "../core/Session";
-import type { SpecialView } from "../network/NetworkClient";
+import type { MemeChallengeView, SpecialView } from "../network/NetworkClient";
 import {
   HAND_SIGNS,
   SEAL_IDS,
@@ -30,6 +30,8 @@ class OverlayController {
   private contest!: HTMLElement;
   private contestSides: Record<Side, { reps: HTMLElement; bar: HTMLElement }> = {} as never;
   private contestRepsShown: Record<Side, number> = { me: -1, opp: -1 };
+  private memeChallenge!: HTMLElement;
+  private memeSides: Record<Side, HTMLElement> = {} as never;
   private sealHud!: HTMLElement;
   private skillPanel!: HTMLElement;
   private skillCast!: HTMLElement;
@@ -70,7 +72,7 @@ class OverlayController {
         </div>
         <div id="startgate" hidden>
           <p class="prep-title">試合開始 · READY?</p>
-          <p class="prep-hint">Both cameras are on. Press <b>START</b> — the countdown begins once <b>both</b> players have pressed it.</p>
+          <p class="prep-hint">Both cameras are on. Press <b>START</b> — the meme challenge opens once <b>both</b> players have pressed it.</p>
           <button type="button" class="startgate-btn">▶ START</button>
           <p class="startgate-status"></p>
         </div>
@@ -87,6 +89,19 @@ class OverlayController {
           <p class="contest-clock">—</p>
           <p class="contest-status"></p>
           <p class="contest-result" hidden></p>
+        </div>
+        <div id="memechallenge" hidden>
+          <div class="meme-body">
+            <p class="meme-title">MEME CHALLENGE</p>
+            <p class="meme-hint">Try the gesture below, or any other meme gesture you've got — first one recognized wins.</p>
+            <p class="meme-label">—</p>
+            <div class="meme-scores">
+              ${this.memeSideHtml("me", "YOU")}
+              ${this.memeSideHtml("opp", "OPPONENT")}
+            </div>
+            <p class="meme-status"></p>
+            <p class="meme-result" hidden></p>
+          </div>
         </div>
         <div id="seal-hud" hidden>
           ${this.rowHtml("opp", "OPPONENT")}
@@ -125,6 +140,10 @@ class OverlayController {
         reps: el.querySelector(".contest-reps")!,
         bar: el.querySelector(".contest-bar > i")!,
       };
+    }
+    this.memeChallenge = this.app.querySelector("#memechallenge")!;
+    for (const side of ["me", "opp"] as Side[]) {
+      this.memeSides[side] = this.memeChallenge.querySelector(`.meme-side[data-side="${side}"] .meme-done`)!;
     }
     this.sealHud = this.app.querySelector("#seal-hud")!;
     this.skillPanel = this.app.querySelector("#skill-dock")!;
@@ -208,7 +227,7 @@ class OverlayController {
     this.prep.hidden = true;
   }
 
-  // ── start gate (both players press START, then the 3·2·1 runs) ──
+  // ── start gate (both players press START, then the memegate challenge opens) ──
   showStartGate(onStart: () => void): void {
     this.startGate.hidden = false;
     const btn = this.startGate.querySelector<HTMLButtonElement>(".startgate-btn")!;
@@ -302,6 +321,65 @@ class OverlayController {
 
   setContestStatus(text: string): void {
     const el = this.contest.querySelector<HTMLElement>(".contest-status")!;
+    el.textContent = text;
+    el.classList.toggle("warn", text !== "");
+  }
+
+  private memeSideHtml(side: Side, label: string): string {
+    return `<div class="meme-side" data-side="${side}">
+      <span class="meme-who">${label}</span>
+      <span class="meme-done">—</span>
+    </div>`;
+  }
+
+  // ── meme-gesture challenge (memegate starts the match; memerace is a bonus round) ──
+  /** Challenge mode hides the seal furniture; the gesture is nothing like a seal. */
+  showMemeChallenge(): void {
+    this.memeChallenge.hidden = false;
+    this.setMemeChallengeMode(true);
+    this.setMemeStatus("");
+    const result = this.memeChallenge.querySelector<HTMLElement>(".meme-result")!;
+    result.hidden = true;
+    result.textContent = "";
+    for (const side of ["me", "opp"] as Side[]) this.memeSides[side].textContent = "—";
+  }
+
+  hideMemeChallenge(): void {
+    this.memeChallenge.hidden = true;
+    this.setMemeChallengeMode(false);
+  }
+
+  /** Seal furniture stays hidden only while combat is actually frozen (memerace) or
+   * the match hasn't started yet (memegate) — see setContestMode's own note. */
+  setMemeChallengeMode(on: boolean): void {
+    this.overlayEl.classList.toggle("meme-mode", on);
+  }
+
+  setMemeChallenge(v: MemeChallengeView): void {
+    this.memeChallenge.querySelector(".meme-label")!.textContent = memeLabelText(v.label);
+    for (const side of ["me", "opp"] as Side[]) {
+      this.memeSides[side].textContent = v.done[side] ? "✓" : "—";
+    }
+
+    const result = this.memeChallenge.querySelector<HTMLElement>(".meme-result")!;
+    result.hidden = v.outcome === null;
+    if (v.outcome) {
+      this.setMemeStatus("");
+      result.textContent = memeResultText(v);
+      result.className = `meme-result meme-result--${v.outcome}`;
+    }
+  }
+
+  /** Live detector feedback — without it a player cannot tell why nothing counts. */
+  setMemeSignal(tracked: boolean): void {
+    if (this.memeChallenge.hidden) return;
+    if (this.memeChallenge.querySelector<HTMLElement>(".meme-result")!.hidden) {
+      this.setMemeStatus(tracked ? "" : "Get your arms and hands in frame");
+    }
+  }
+
+  setMemeStatus(text: string): void {
+    const el = this.memeChallenge.querySelector<HTMLElement>(".meme-status")!;
     el.textContent = text;
     el.classList.toggle("warn", text !== "");
   }
@@ -549,6 +627,16 @@ function contestResultText(v: SpecialView): string {
   if (v.outcome === "draw") return "DRAW — no one heals";
   const who = v.outcome === "me" ? "YOU WIN" : "OPPONENT WINS";
   // winning at full health is a real outcome, not a bug — say so plainly
+  return v.healed > 0 ? `${who} · +${v.healed} HP` : `${who} · already at full HP`;
+}
+
+function memeLabelText(label: string): string {
+  return label.replace(/_/g, " ").toUpperCase();
+}
+
+function memeResultText(v: MemeChallengeView): string {
+  if (v.outcome === "draw") return "TIME'S UP — no one heals";
+  const who = v.outcome === "me" ? "YOU WIN" : "OPPONENT WINS";
   return v.healed > 0 ? `${who} · +${v.healed} HP` : `${who} · already at full HP`;
 }
 

@@ -1194,3 +1194,115 @@ body {
 .contest-result--draw {
   color: var(--muted);
 }
+
+/* ── meme-gesture challenge (memegate starts the match; memerace is a bonus round) ── */
+#memechallenge {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(560px, 92vw);
+  padding: 1.1rem 1.4rem 1.3rem;
+  text-align: center;
+  border: 1px solid #d69b4b;
+  border-radius: 14px;
+  background: rgba(20, 14, 6, 0.93);
+  box-shadow: 0 0 40px rgba(214, 155, 75, 0.35);
+  pointer-events: none;
+}
+
+#memechallenge[hidden] {
+  display: none;
+}
+
+/* the challenge replaces seal input entirely — get the seal furniture out of the way */
+#overlay.meme-mode #skill-dock,
+#overlay.meme-mode #skill-test,
+#overlay.meme-mode #seal-now,
+#overlay.meme-mode #seal-hud {
+  display: none;
+}
+
+.meme-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #ffcf8a;
+}
+
+.meme-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.meme-label {
+  margin: 0 0 0.9rem;
+  font-family: Impact, system-ui, sans-serif;
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.meme-scores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+}
+
+.meme-who {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.meme-done {
+  display: block;
+  font-family: Impact, system-ui, sans-serif;
+  font-size: 2.4rem;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.meme-side[data-side="me"] .meme-done {
+  color: #7ee0ff;
+}
+
+.meme-status {
+  margin: 0.35rem 0 0;
+  min-height: 1.1em;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: transparent;
+}
+
+.meme-status.warn {
+  color: #ffb454;
+}
+
+.meme-result {
+  margin: 0.5rem 0 0;
+  font-family: Impact, system-ui, sans-serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.06em;
+}
+
+.meme-result[hidden] {
+  display: none;
+}
+
+.meme-result--me {
+  color: #4ade80;
+}
+
+.meme-result--opp {
+  color: #ff5470;
+}
+
+.meme-result--draw {
+  color: var(--muted);
+}

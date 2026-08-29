@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  COUNTDOWN_TICKS,
   MAX_HP,
   MAX_SHIELDS,
+  MEME_HEAL,
+  MEME_RACE_HP_THRESHOLD,
   SHIELD_MAX_TICKS,
   SPECIAL_HEAL,
   SPECIAL_TARGET_REPS,
@@ -11,17 +12,20 @@ import {
   type Seat,
 } from "@jutsu/protocol";
 import { ATTACKS, attackById, SHIELD } from "./commands.ts";
+import { MEME_LABELS } from "./memeLabels.ts";
 
 /** last seal of the shield sequence — the seal that must stay held (was 壬). */
 const SHIELD_HOLD = SHIELD.seq[SHIELD.seq.length - 1];
 import {
-  countdownValue,
   createMatch,
   markReady,
+  memeChallengePublic,
+  receiveMeme,
   receiveReps,
   specialPublic,
   tickMatch,
   type MatchSession,
+  type MemeChallenge,
   type PendingAttack,
   type SpecialContest,
 } from "./match.ts";
@@ -76,6 +80,40 @@ function contestMatch(
 
 function repsMsg(seq: number, reps: number) {
   return { type: "reps" as const, seq, reps, tClient: 0 };
+}
+
+function memeMsg(seq: number, label: string) {
+  return { type: "meme" as const, seq, label };
+}
+
+function memeGateMatch(over: Partial<MemeChallenge> = {}): MatchSession {
+  let m = createMatch();
+  m = markReady(m, "a", "camera");
+  m = markReady(m, "b", "camera");
+  m = markReady(m, "a", "start");
+  m = markReady(m, "b", "start");
+  return {
+    ...m,
+    memeChallenge: { ...m.memeChallenge!, ...over },
+  };
+}
+
+function memeRaceMatch(over: Partial<MemeChallenge> = {}): MatchSession {
+  const m = liveMatch();
+  return {
+    ...m,
+    phase: "memerace",
+    memeChallenge: {
+      label: "dab",
+      startTick: 0,
+      endTick: 10_000,
+      doneAtTick: { a: null, b: null },
+      winner: null,
+      healed: 0,
+      resolvedAtTick: null,
+      ...over,
+    },
+  };
 }
 
 test("defines all elemental levels with the requested damage", () => {
@@ -266,17 +304,43 @@ test("seal buffer dedups, drops dead seals, and caps at the longest sequence", (
   assert.deepEqual(buf(), []);
 });
 
-test("server owns 3, 2, 1, 0 countdown", () => {
+test("both players ready opens the memegate with a random label from labels.csv", () => {
   let m = createMatch();
   m = markReady(m, "a", "camera");
   m = markReady(m, "b", "camera");
   m = markReady(m, "a", "start");
   m = markReady(m, "b", "start");
-  assert.equal(m.phase, "countdown");
-  assert.equal(countdownValue(m), 3);
+  assert.equal(m.phase, "memegate");
+  assert.ok(MEME_LABELS.includes(m.memeChallenge!.label));
+});
 
-  for (let i = 0; i < COUNTDOWN_TICKS; i++) m = tickMatch(m);
-  assert.equal(m.phase, "live");
+test("performing the memegate's label starts the match immediately", () => {
+  const m = memeGateMatch();
+  const label = m.memeChallenge!.label;
+  const next = receiveMeme(m, "a", memeMsg(1, label));
+  assert.equal(next.phase, "live");
+  assert.equal(next.memeChallenge, null);
+});
+
+test("memegate accepts any trained gesture, not just the one shown", () => {
+  const m = memeGateMatch({ label: "dab" });
+  const next = receiveMeme(m, "a", memeMsg(1, "mog"));
+  assert.equal(next.phase, "live", "mog is a real trained gesture, so it still resolves the gate");
+});
+
+test("memegate ignores a label that isn't a real trained gesture", () => {
+  const m = memeGateMatch({ label: "dab" });
+  const next = receiveMeme(m, "a", memeMsg(1, "not_a_real_gesture"));
+  assert.equal(next.phase, "memegate");
+  assert.equal(next.memeChallenge?.doneAtTick.a, null);
+});
+
+test("memegate keeps showing the same label indefinitely, no re-roll", () => {
+  const m = memeGateMatch({ label: "dab", endTick: 1 });
+  let next = m;
+  for (let i = 0; i < 200; i++) next = tickMatch(next);
+  assert.equal(next.phase, "memegate");
+  assert.equal(next.memeChallenge?.label, "dab", "still the same label, however long it takes");
 });
 
 test("rematch resets only after both players are ready", () => {
@@ -286,7 +350,7 @@ test("rematch resets only after both players are ready", () => {
   m = markReady(m, "a", "rematch");
   assert.equal(m.phase, "ended");
   m = markReady(m, "b", "rematch");
-  assert.equal(m.phase, "countdown");
+  assert.equal(m.phase, "memegate");
   assert.equal(m.fighters.a.hp, MAX_HP);
   assert.equal(m.fighters.a.shields, MAX_SHIELDS);
 });
@@ -425,4 +489,121 @@ test("the contest re-arms every trigger-count casts rather than firing once", ()
   assert.equal(m.phase, "special", "a second contest opens after another trigger-count casts");
   assert.deepEqual(m.special?.reps, { a: 0, b: 0 });
   assert.equal(m.special?.winner, null);
+});
+
+// ── meme race (mid-battle bonus round) ───────────────────────────────
+
+test("the meme race opens the first time either fighter's HP drops enough, once the attack has landed", () => {
+  let m = liveMatch();
+  seedCast(m, "a", "fire_3"); // 4 damage — enough to clear MEME_RACE_HP_THRESHOLD (2) in one hit
+
+  m = tickMatch(m);
+  assert.equal(m.phase, "live", "the triggering attack is still in flight");
+
+  for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "memerace");
+  assert.equal(m.fighters.b.hp, MAX_HP - 4, "the triggering attack still deals its damage");
+  assert.equal(m.memeRaceTriggered, true);
+  assert.ok(MEME_LABELS.includes(m.memeChallenge!.label));
+});
+
+test("a hit lighter than the threshold doesn't trigger the meme race yet", () => {
+  let m = liveMatch();
+  seedCast(m, "a", "fire_1"); // only 1 damage — below MEME_RACE_HP_THRESHOLD (2)
+  // level 1 needs the ~20-tick finalize delay before it even casts (unlike
+  // level 3's immediate cast), plus startup + the clash-window resolve delay
+  for (let i = 0; i < 60 && m.phase === "live"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "live");
+  assert.equal(m.fighters.b.hp, MAX_HP - 1);
+  assert.equal(m.memeRaceTriggered, false);
+});
+
+test("the meme race never re-triggers once it's been used, even as HP keeps dropping", () => {
+  let m = liveMatch();
+  m.memeRaceTriggered = true;
+  m.fighters.b = { ...m.fighters.b, hp: MAX_HP - MEME_RACE_HP_THRESHOLD };
+  seedCast(m, "a", "fire_3");
+  for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "live", "already used this match, so it doesn't open again");
+});
+
+test("the six-seven trigger and the meme-race trigger are independent", () => {
+  let m = liveMatch();
+  m.attacks = 3;
+  seedCast(m, "a", "fire_3"); // level 3 casts immediately, unlike level 1/2's finalize delay
+  for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "memerace", "meme race triggers on HP loss without touching the six-seven counter");
+  assert.equal(m.attacks, 4);
+});
+
+test("the meme race accepts reports immediately, no lead-in", () => {
+  let m = liveMatch();
+  seedCast(m, "a", "fire_3");
+  for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "memerace");
+  const label = m.memeChallenge!.label;
+
+  const next = receiveMeme(m, "a", memeMsg(1, label));
+  assert.equal(next.memeChallenge?.winner, "a");
+});
+
+test("performing the meme race's label heals the first to do it", () => {
+  const m = memeRaceMatch({ label: "dab" });
+  m.fighters.a = { ...m.fighters.a, hp: 5 };
+  const next = receiveMeme(m, "a", memeMsg(1, "dab"));
+  assert.equal(next.phase, "live");
+  assert.equal(next.memeChallenge?.winner, "a");
+  assert.equal(next.memeChallenge?.healed, MEME_HEAL);
+  assert.equal(next.fighters.a.hp, 5 + MEME_HEAL);
+});
+
+test("the meme race accepts any trained gesture and shows what actually won", () => {
+  const m = memeRaceMatch({ label: "dab" });
+  m.fighters.a = { ...m.fighters.a, hp: 5 };
+  const next = receiveMeme(m, "a", memeMsg(1, "korean_heart"));
+  assert.equal(next.memeChallenge?.winner, "a", "korean_heart is a real trained gesture, so it still wins");
+  assert.equal(next.fighters.a.hp, 5 + MEME_HEAL);
+  assert.equal(next.memeChallenge?.label, "korean_heart", "the banner shows what was actually performed");
+});
+
+test("the meme race ignores a label that isn't a real trained gesture", () => {
+  const m = memeRaceMatch({ label: "dab" });
+  const next = receiveMeme(m, "a", memeMsg(1, "not_a_real_gesture"));
+  assert.equal(next.memeChallenge?.winner, null);
+  assert.equal(next.fighters.a.hp, MAX_HP);
+});
+
+test("the second player to perform the meme race's label gets nothing", () => {
+  let m = memeRaceMatch({ label: "dab" });
+  m = receiveMeme(m, "a", memeMsg(1, "dab"));
+  const next = receiveMeme(m, "b", memeMsg(1, "dab"));
+  assert.equal(next.memeChallenge?.winner, "a", "already resolved — b's report is a no-op");
+  assert.equal(next.fighters.b.hp, MAX_HP);
+});
+
+test("the meme-race heal is capped at full health", () => {
+  const m = memeRaceMatch({ label: "dab" });
+  const next = receiveMeme(m, "a", memeMsg(1, "dab"));
+  assert.equal(next.memeChallenge?.healed, 0);
+  assert.equal(next.fighters.a.hp, MAX_HP);
+});
+
+test("the meme race's time cap resolves as a draw — nobody heals", () => {
+  const m = memeRaceMatch({ endTick: 1 });
+  const next = tickMatch(m);
+  assert.equal(next.phase, "live");
+  assert.equal(next.memeChallenge?.winner, "draw");
+  assert.equal(next.memeChallenge?.healed, 0);
+  assert.equal(next.fighters.a.hp, MAX_HP);
+  assert.equal(next.fighters.b.hp, MAX_HP);
+});
+
+test("the meme race result rides along briefly, then clears", () => {
+  let m = memeRaceMatch({ label: "dab" });
+  m = receiveMeme(m, "a", memeMsg(1, "dab"));
+  assert.equal(memeChallengePublic(m)?.winner, "a");
+
+  for (let i = 0; i < 80; i++) m = tickMatch(m);
+  assert.equal(m.memeChallenge, null);
+  assert.equal(memeChallengePublic(m), undefined);
 });
