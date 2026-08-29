@@ -1,0 +1,220 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #10141c;
+  color: #eef1f8;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+#app {
+  width: 100%;
+  max-width: 640px;
+}
+
+h1 {
+  text-align: center;
+  letter-spacing: 0.08em;
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  background: #171c27;
+  border: 1px solid #262d3d;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+
+.field label {
+  font-size: 0.8rem;
+  color: #9aa4bb;
+}
+
+.field input {
+  background: #0e121a;
+  border: 1px solid #2c3346;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  color: #eef1f8;
+  font-size: 0.95rem;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.connect-btn {
+  width: 100%;
+  padding: 0.7rem;
+  background: #4f7dff;
+  color: white;
+  font-size: 1rem;
+}
+
+.connect-btn:hover {
+  background: #3d67e6;
+}
+
+.status {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #9aa4bb;
+  margin-top: 0.6rem;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.panel h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.bar {
+  height: 14px;
+  border-radius: 7px;
+  background: #262d3d;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+  border: 1px solid #2c3346;
+}
+
+.bar-fill {
+  height: 100%;
+  transition: width 0.15s ease;
+}
+
+.bar-fill.hp {
+  background: linear-gradient(90deg, #ff5470, #ff8a5b);
+}
+
+.bar-fill.energy {
+  background: linear-gradient(90deg, #35d0ba, #4f7dff);
+}
+
+.bar-label {
+  font-size: 0.72rem;
+  color: #9aa4bb;
+  margin-bottom: 0.15rem;
+}
+
+.meta-line {
+  font-size: 0.78rem;
+  color: #b7bfd4;
+  margin-top: 0.4rem;
+}
+
+.dead {
+  opacity: 0.45;
+}
+
+.signs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.sign-btn {
+  padding: 0.85rem 0.4rem;
+  background: #1e2534;
+  color: #eef1f8;
+  border: 1px solid #2c3346;
+  font-size: 0.85rem;
+  transition: background 0.1s ease, transform 0.1s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sign-btn:active,
+.sign-btn.holding {
+  background: #4f7dff;
+  transform: scale(0.97);
+}
+
+.sign-btn[data-kind="REFLECT"].holding {
+  background: #b16bff;
+}
+
+.sign-btn[data-kind="PROTECT"].holding {
+  background: #35d0ba;
+}
+
+.log {
+  background: #0e121a;
+  border: 1px solid #2c3346;
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  color: #9aa4bb;
+  min-height: 90px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.log div {
+  margin-bottom: 0.2rem;
+}
+
+.banner {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  padding: 0.8rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.banner.win {
+  background: #14351f;
+  color: #4ade80;
+}
+
+.banner.lose {
+  background: #3a1620;
+  color: #ff5470;
+}
+
+.actions-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.reset-btn {
+  flex: 1;
+  padding: 0.6rem;
+  background: #262d3d;
+  color: #eef1f8;
+}
+
+.reset-btn:hover {
+  background: #313a52;
+}
