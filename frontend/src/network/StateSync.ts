@@ -1,4 +1,5 @@
 import { bus, Events } from "../core/EventBus";
+import { sfx } from "../core/Sfx";
 import { SPAWN } from "../core/GameConfig";
 import type { Character } from "../entities/Character";
 import type { EffectsLayer } from "../layers/EffectsLayer";
@@ -91,6 +92,9 @@ export class StateSync {
     bus.emit(Events.SKILL_FIRED, { side, skillId });
 
     if (skill?.action === "ATTACK" && skill.element) {
+      // at cast, not at impact: the clip runs the length of the projectile's
+      // flight and its tail lands on the hit
+      sfx.play(skill.element.toLowerCase());
       char.cast(skill.element);
       const from = side === "me" ? SPAWN.me : SPAWN.opp;
       const to = side === "me" ? SPAWN.opp : SPAWN.me;
