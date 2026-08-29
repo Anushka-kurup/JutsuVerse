@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>6-7 Detection Lab</title>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>6-7 Detection Lab</h1>
+        <span class="sub">Steps 1–5 — tracking, signal, rep counting</span>
+      </header>
+      <p class="sub">
+        Two hands are collapsed into one number, <code>d</code>, measured in hand
+        spans. Positive means the left hand on screen is higher. Nothing is
+        counted yet — this is the instrument the thresholds get read off.
+      </p>
+
+      <div class="cols">
+        <div class="stage">
+          <video id="video" playsinline muted></video>
+          <canvas id="overlay"></canvas>
+          <div class="overlay-msg" id="overlay-msg">Press Start</div>
+        </div>
+
+        <div class="panel">
+          <h2>Reps</h2>
+          <div class="repbox"><span id="reps">0</span></div>
+          <table>
+            <tr><td>Pose</td><td id="pose">—</td></tr>
+          </table>
+
+          <h2>Signal</h2>
+          <table>
+            <tr><td>d (hand spans)</td><td id="sig-d">—</td></tr>
+            <tr><td>Hand span</td><td id="sig-scale">—</td></tr>
+            <tr><td><span class="dot a"></span>Peak A high</td><td id="peak-a">—</td></tr>
+            <tr><td><span class="dot b"></span>Peak B high</td><td id="peak-b">—</td></tr>
+            <tr><td>Weaker side</td><td id="peak-min">—</td></tr>
+            <tr><td>Signal uptime</td><td id="signal-uptime">—</td></tr>
+            <tr><td>Bridged frames</td><td id="bridged">—</td></tr>
+          </table>
+
+          <h2>Tracking</h2>
+          <table>
+            <tr><td>Hands detected</td><td id="count">—</td></tr>
+            <tr><td>Two-hand stability</td><td id="stability">—</td></tr>
+          </table>
+          <div class="bar"><i id="stability-bar" style="width:0%"></i></div>
+          <table>
+            <tr><td>Frames with 2 hands</td><td id="split-2">—</td></tr>
+            <tr><td>Frames with 1 hand</td><td id="split-1">—</td></tr>
+            <tr><td>Frames with 0 hands</td><td id="split-0">—</td></tr>
+            <tr><td>Palm near frame edge</td><td id="clipped">—</td></tr>
+          </table>
+
+          <h2>Dropouts <span class="sub">(last 3s)</span></h2>
+          <canvas id="timeline" width="600" height="22" class="timeline"></canvas>
+          <div class="legend">
+            <span><i class="sw good"></i>2 hands</span>
+            <span><i class="sw warn"></i>1 hand</span>
+            <span><i class="sw bad"></i>none</span>
+            <span class="right">now →</span>
+          </div>
+          <table>
+            <tr><td>Longest gap</td><td id="gap-longest">—</td></tr>
+            <tr><td>Gaps over 200ms</td><td id="gap-bad">—</td></tr>
+          </table>
+
+          <h2>Performance</h2>
+          <table>
+            <tr><td>FPS</td><td id="fps">—</td></tr>
+            <tr><td>Inference</td><td id="infer">—</td></tr>
+            <tr><td>Delegate</td><td id="delegate">—</td></tr>
+            <tr><td>Camera</td><td id="res">—</td></tr>
+          </table>
+
+          <div class="controls">
+            <button class="primary" id="start">Start</button>
+            <button id="stop" disabled>Stop</button>
+            <button id="record" disabled>Record</button>
+          </div>
+          <div class="controls">
+            <label class="filebtn">
+              Replay a recording…
+              <input type="file" id="load" accept="application/json" />
+            </label>
+            <span class="sub" id="rec-state"></span>
+          </div>
+        </div>
+      </div>
+
+      <h2 class="trace-title">Signal trace <span class="sub">— last 6 seconds</span></h2>
+      <canvas id="trace" width="1000" height="200" class="trace"></canvas>
+      <div class="legend">
+        <span><i class="sw good"></i>enter ±0.6</span>
+        <span><i class="sw warn"></i>exit ±0.25</span>
+        <span><i class="sw held"></i>bridged hand</span>
+        <span><i class="sw bad"></i>signal lost</span>
+        <span class="right">now →</span>
+      </div>
+
+      <p class="note">
+        Do the gesture at full speed and read the trace: the peak height of the
+        wave sets the enter threshold, and the width of the noise band around
+        zero when you hold still sets the exit threshold. Record a run to replay
+        it against different numbers in Step 3.
+      </p>
+    </div>
+    <script type="module" src="/src/lab/sixseven.ts"></script>
+  </body>
+</html>
