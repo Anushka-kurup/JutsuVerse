@@ -9,7 +9,6 @@ import type { ConnectOpts } from "../types";
 export const net = new NetworkClient();
 
 export const session: ConnectOpts = {
-  server: "http://localhost:8080",
-  room: "match1",
-  player: "p1",
+  room: "",
+  player: "Ronin",
 };

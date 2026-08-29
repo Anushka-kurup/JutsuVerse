@@ -8,7 +8,6 @@ export * from "../../shared/skills";
 export type Side = "me" | "opp";
 
 export interface ConnectOpts {
-  server: string;
   room: string;
   player: string;
 }
