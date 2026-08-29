@@ -48,9 +48,13 @@ const BY_ID = new Map(HAND_SIGNS.map((s) => [s.id, s]));
 export const signByIndex = (i: number): HandSign | undefined => HAND_SIGNS[i];
 export const signById = (id: string): HandSign | undefined => BY_ID.get(id);
 
-/** ids that are real, castable seals (excludes the none/unknown display helpers) */
-export const SEAL_IDS = HAND_SIGNS.filter(
-  (s) => s.id !== "none" && s.id !== "unknown",
-).map((s) => s.id);
+/**
+ * ids that are real, castable seals. Excludes the none/unknown display helpers
+ * and `mizunoe` (壬) — the detector can't reliably recognise it, so it's kept in
+ * HAND_SIGNS only for raw class-index integrity and never used in gameplay.
+ */
+const NON_SEAL = new Set(["none", "unknown", "mizunoe"]);
 
-export const isSeal = (id: string): boolean => id !== "none" && id !== "unknown" && BY_ID.has(id);
+export const SEAL_IDS = HAND_SIGNS.filter((s) => !NON_SEAL.has(s.id)).map((s) => s.id);
+
+export const isSeal = (id: string): boolean => !NON_SEAL.has(id) && BY_ID.has(id);

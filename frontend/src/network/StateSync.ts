@@ -94,15 +94,19 @@ export class StateSync {
       char.cast(skill.element);
       const from = side === "me" ? SPAWN.me : SPAWN.opp;
       const to = side === "me" ? SPAWN.opp : SPAWN.me;
-      this.fx.projectile({
-        fromX: from.x,
-        fromY: from.y - CHEST_DY,
-        toX: to.x,
-        toY: to.y - CHEST_DY,
-        element: skill.element,
-        skillId: skill.id,
-        level: skill.level ?? 1,
-      });
+      const level = skill.level ?? 1;
+      this.fx.volley(
+        {
+          fromX: from.x,
+          fromY: from.y - CHEST_DY,
+          toX: to.x,
+          toY: to.y - CHEST_DY,
+          element: skill.element,
+          skillId: skill.id,
+          level,
+        },
+        level, // level 1/2/3 → 1/2/3 projectiles
+      );
     } else {
       char.pulseDefense("PROTECT");
       char.cast("NEUTRAL");

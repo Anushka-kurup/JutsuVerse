@@ -302,6 +302,7 @@ body {
   z-index: 4;
 }
 
+/* both feeds share the base `top` so they stay horizontally aligned */
 .cam-window--local {
   left: 10px;
 }

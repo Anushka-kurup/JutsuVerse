@@ -226,21 +226,14 @@ function resolveClash(
   tick: number,
 ): { a: Fighter; b: Fighter } {
   if (BEATS[a.command.element] === b.command.element) {
-    return { ...fighters, b: takeDamage(fighters.b, tick, 15) };
+    return { ...fighters, b: takeDamage(fighters.b, tick, a.command.damage) };
   }
   if (BEATS[b.command.element] === a.command.element) {
-    return { ...fighters, a: takeDamage(fighters.a, tick, 15) };
-  }
-  if (a.command.level === b.command.level) return fighters;
-  if (a.command.level > b.command.level) {
-    return {
-      ...fighters,
-      b: takeDamage(fighters.b, tick, a.command.damage - b.command.damage),
-    };
+    return { ...fighters, a: takeDamage(fighters.a, tick, b.command.damage) };
   }
   return {
-    ...fighters,
-    a: takeDamage(fighters.a, tick, b.command.damage - a.command.damage),
+    a: takeDamage(fighters.a, tick, b.command.damage),
+    b: takeDamage(fighters.b, tick, a.command.damage),
   };
 }
 
