@@ -70,7 +70,13 @@ export const InputMsg = z.object({
 });
 export type InputMsg = z.infer<typeof InputMsg>;
 
-export const ReadyMsg = z.object({ type: z.literal("ready") });
+/** two-stage ready: "camera" = local camera is on, "start" = pressed Start */
+export const READY_STAGES = ["camera", "start"] as const;
+export type ReadyStage = (typeof READY_STAGES)[number];
+export const ReadyMsg = z.object({
+  type: z.literal("ready"),
+  stage: z.enum(READY_STAGES).default("camera"),
+});
 export const ResetMsg = z.object({ type: z.literal("reset") });
 export const LeaveMsg = z.object({ type: z.literal("leave") });
 
@@ -83,6 +89,7 @@ export const ClientMsg = z.discriminatedUnion("type", [
   LeaveMsg,
 ]);
 export type ClientMsg = z.infer<typeof ClientMsg>;
+export type ReadyMsg = z.infer<typeof ReadyMsg>;
 
 export const FighterPublicSchema = z.object({
   hp: z.number(),
@@ -117,5 +124,8 @@ export type ServerMsg =
       type: "match_state";
       phase: Phase;
       winner?: Seat | "draw" | null;
+      /** per-seat gate flags so clients can say "waiting for opponent" */
+      cam?: { a: boolean; b: boolean };
+      ready?: { a: boolean; b: boolean };
     }
   | { type: "error"; code: string; message: string };

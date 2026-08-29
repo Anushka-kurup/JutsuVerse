@@ -35,7 +35,10 @@ export class BattleScene extends Phaser.Scene {
   /** false until the 3·2·1 countdown finishes — gates all input */
   private started = false;
   private counting = false;
-  private readied = false;
+  /** camera enabled locally (gate 1) */
+  private camReadied = false;
+  /** START pressed locally (gate 2) */
+  private startPressed = false;
 
   constructor() {
     super("Battle");
@@ -44,7 +47,8 @@ export class BattleScene extends Phaser.Scene {
   create(): void {
     this.started = false;
     this.counting = false;
-    this.readied = false;
+    this.camReadied = false;
+    this.startPressed = false;
     new BackgroundLayer(this);
 
     this.preview = new CameraPreview(Overlay.cameraRoot, () => this.toggleCamera());
@@ -163,10 +167,10 @@ export class BattleScene extends Phaser.Scene {
       const stream = await this.bridge.start();
       this.videoCall.setLocalStream(stream);
       this.preview.setEnabled(true);
-      if (!this.readied) {
-        this.readied = true;
-        net.ready(); // camera's on → tell the server; round starts when both are ready
-        if (!this.started) Overlay.setPrepStatus("You're ready — waiting for opponent's camera…");
+      if (!this.camReadied) {
+        this.camReadied = true;
+        net.cameraReady(); // gate 1 cleared → the start banner shows once both cameras are on
+        if (!this.started) Overlay.setPrepStatus("Camera on — waiting for opponent's camera…");
       }
     } catch (err) {
       console.error(err);
@@ -179,14 +183,25 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private onNetMatch(m: { phase: Phase; winner: Seat | "draw" | null }): void {
-    if (m.phase === "live" && !this.started && !this.counting) {
-      // both players readied (= both cameras on) → run the 3·2·1
+    if (m.phase === "connecting") {
+      // gate 1 done (both cameras on) → gate 2: both players press START
+      Overlay.hidePrep();
+      if (!this.startPressed) {
+        Overlay.showStartGate(() => {
+          this.startPressed = true;
+          net.startReady();
+        });
+      }
+    } else if (m.phase === "live" && !this.started && !this.counting) {
+      // both players pressed START → run the 3·2·1
       this.counting = true;
       Overlay.hidePrep();
+      Overlay.hideStartGate();
       this.runCountdown();
     } else if (m.phase === "ended") {
       this.started = false;
       this.counting = false;
+      this.startPressed = false;
       this.matcher.reset();
       const iWon = m.winner !== "draw" && m.winner === net.mySeat;
       this.scene.launch("Result", { winner: m.winner ?? "draw", iWon });
@@ -265,6 +280,7 @@ export class BattleScene extends Phaser.Scene {
 
     Overlay.setDebug(null);
     Overlay.hidePrep();
+    Overlay.hideStartGate();
     Overlay.hideSealGuide();
     Overlay.hideSkillPanel();
     Overlay.hideSkillTest();

@@ -4,6 +4,7 @@ import {
   type FighterPublic,
   type InputMsg,
   type Phase,
+  type ReadyStage,
   type Seat,
   type Sign,
 } from "@jutsu/protocol";
@@ -29,6 +30,9 @@ export interface MatchSession {
   fighters: { a: Fighter; b: Fighter };
   pending: { a: PendingEdge[]; b: PendingEdge[] };
   lastSeq: { a: number; b: number };
+  /** stage 1 gate: both cameras enabled → phase "connecting" */
+  cam: { a: boolean; b: boolean };
+  /** stage 2 gate: both pressed Start → phase "live" */
   ready: { a: boolean; b: boolean };
   winner: Seat | "draw" | null;
 }
@@ -40,25 +44,31 @@ export function createMatch(): MatchSession {
     fighters: { a: createFighter(), b: createFighter() },
     pending: { a: [], b: [] },
     lastSeq: { a: -1, b: -1 },
+    cam: { a: false, b: false },
     ready: { a: false, b: false },
     winner: null,
   };
 }
 
-export function markReady(m: MatchSession, seat: Seat): MatchSession {
-  if (m.phase !== "waiting") return m;
+export function markReady(
+  m: MatchSession,
+  seat: Seat,
+  stage: ReadyStage = "camera",
+): MatchSession {
+  if (stage === "camera") {
+    if (m.phase !== "waiting") return m;
+    const cam = { ...m.cam, [seat]: true };
+    return { ...m, cam, phase: cam.a && cam.b ? "connecting" : "waiting" };
+  }
+  if (m.phase !== "connecting") return m;
   const ready = { ...m.ready, [seat]: true };
-  const both = ready.a && ready.b;
-  return {
-    ...m,
-    ready,
-    phase: both ? "live" : "waiting",
-  };
+  return { ...m, ready, phase: ready.a && ready.b ? "live" : "connecting" };
 }
 
-export function restartMatch(readySeats: Iterable<Seat>): MatchSession {
+/** rematch: cameras stay on, but both players press Start again */
+export function restartMatch(camSeats: Iterable<Seat>): MatchSession {
   let match = createMatch();
-  for (const seat of readySeats) match = markReady(match, seat);
+  for (const seat of camSeats) match = markReady(match, seat, "camera");
   return match;
 }
 

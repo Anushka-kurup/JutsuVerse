@@ -1,6 +1,7 @@
 import {
   ClientMsg,
   type InputMsg,
+  type ReadyMsg,
   type Seat,
   type ServerMsg,
 } from "@jutsu/protocol";
@@ -15,6 +16,16 @@ import {
 
 function send(ws: WebSocket, msg: ServerMsg): void {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+}
+
+function matchState(room: Room): ServerMsg {
+  return {
+    type: "match_state",
+    phase: room.match.phase,
+    winner: room.match.winner,
+    cam: room.match.cam,
+    ready: room.match.ready,
+  };
 }
 
 function broadcast(room: Room, msg: ServerMsg, except?: Seat): void {
@@ -72,7 +83,7 @@ function dispatch(ws: WebSocket, msg: ClientMsg): void {
       onJoin(ws, msg.code, msg.name);
       return;
     case "ready":
-      onReady(ws);
+      onReady(ws, msg.stage);
       return;
     case "input":
       onInput(ws, msg);
@@ -100,11 +111,7 @@ function onReset(ws: WebSocket): void {
   const loc = locationOf(ws);
   if (!loc) return;
   loc.room.match = restartMatch(loc.room.players.keys());
-  broadcast(loc.room, {
-    type: "match_state",
-    phase: loc.room.match.phase,
-    winner: loc.room.match.winner,
-  });
+  broadcast(loc.room, matchState(loc.room));
   broadcast(loc.room, { type: "state", ...publicState(loc.room.match) });
 }
 
@@ -130,7 +137,7 @@ function onJoin(ws: WebSocket, code?: string, name?: string): void {
     peerPresent: room.players.size === 2,
     name: player.name,
   });
-  send(ws, { type: "match_state", phase: room.match.phase });
+  send(ws, matchState(room));
 
   if (room.players.size === 2) {
     const other = [...room.players.values()].find((p) => p.seat !== player.seat);
@@ -145,15 +152,11 @@ function onJoin(ws: WebSocket, code?: string, name?: string): void {
   }
 }
 
-function onReady(ws: WebSocket): void {
+function onReady(ws: WebSocket, stage: ReadyMsg["stage"]): void {
   const loc = locationOf(ws);
   if (!loc) return;
-  loc.room.match = markReady(loc.room.match, loc.seat);
-  broadcast(loc.room, {
-    type: "match_state",
-    phase: loc.room.match.phase,
-    winner: loc.room.match.winner,
-  });
+  loc.room.match = markReady(loc.room.match, loc.seat, stage);
+  broadcast(loc.room, matchState(loc.room));
 }
 
 function onInput(ws: WebSocket, msg: InputMsg): void {
@@ -175,9 +178,5 @@ function onLeave(ws: WebSocket): void {
     type: "peer_left",
     seat: remaining.seat === "a" ? "b" : "a",
   });
-  send(remaining.ws, {
-    type: "match_state",
-    phase: room.match.phase,
-    winner: room.match.winner,
-  });
+  send(remaining.ws, matchState(room));
 }

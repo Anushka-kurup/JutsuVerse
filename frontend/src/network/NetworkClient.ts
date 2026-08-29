@@ -105,7 +105,12 @@ export class NetworkClient {
         break;
       }
       case "match_state":
-        bus.emit(Events.NET_MATCH, { phase: msg.phase, winner: msg.winner ?? null });
+        bus.emit(Events.NET_MATCH, {
+          phase: msg.phase,
+          winner: msg.winner ?? null,
+          cam: msg.cam,
+          ready: msg.ready,
+        });
         break;
       case "error":
         bus.emit(Events.NET_ERROR, msg.message);
@@ -123,14 +128,19 @@ export class NetworkClient {
     this.input(sign, "up");
   }
 
-  /** tell the server this player is ready (sent once the local camera is on) */
-  ready(): void {
-    this.sock.send({ type: "ready" });
+  /** stage 1: the local camera is on */
+  cameraReady(): void {
+    this.sock.send({ type: "ready", stage: "camera" });
+  }
+
+  /** stage 2: this player pressed Start */
+  startReady(): void {
+    this.sock.send({ type: "ready", stage: "start" });
   }
 
   reset(): void {
     this.sock.send({ type: "reset" });
-    this.sock.send({ type: "ready" }); // rematch: cameras already on, go straight to the countdown
+    this.sock.send({ type: "ready", stage: "camera" }); // rematch: camera is still on
   }
 
   /** WebRTC signalling passthrough for VideoCall */

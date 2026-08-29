@@ -15,6 +15,7 @@ class OverlayController {
   private menuError!: HTMLElement;
   private lobby!: HTMLElement;
   private prep!: HTMLElement;
+  private startGate!: HTMLElement;
   private camMount!: HTMLElement;
   private sealHud!: HTMLElement;
   private skillPanel!: HTMLElement;
@@ -55,6 +56,12 @@ class OverlayController {
           <p class="prep-hint">Enable your camera — the round begins once <b>both</b> players are ready.</p>
           <p class="prep-status">…</p>
         </div>
+        <div id="startgate" hidden>
+          <p class="prep-title">試合開始 · READY?</p>
+          <p class="prep-hint">Both cameras are on. Press <b>START</b> — the countdown begins once <b>both</b> players have pressed it.</p>
+          <button type="button" class="startgate-btn">▶ START</button>
+          <p class="startgate-status"></p>
+        </div>
         <div id="cam-mount"></div>
         <div id="seal-hud" hidden>
           ${this.rowHtml("opp", "OPPONENT")}
@@ -88,6 +95,7 @@ class OverlayController {
     this.menuError = this.app.querySelector(".menu-error")!;
     this.lobby = this.app.querySelector("#lobby")!;
     this.prep = this.app.querySelector("#prep")!;
+    this.startGate = this.app.querySelector("#startgate")!;
     this.camMount = this.app.querySelector("#cam-mount")!;
     this.sealHud = this.app.querySelector("#seal-hud")!;
     this.skillPanel = this.app.querySelector("#skill-dock")!;
@@ -172,6 +180,27 @@ class OverlayController {
     this.prep.hidden = true;
   }
 
+  // ── start gate (both players press START, then the 3·2·1 runs) ──
+  showStartGate(onStart: () => void): void {
+    this.startGate.hidden = false;
+    const btn = this.startGate.querySelector<HTMLButtonElement>(".startgate-btn")!;
+    btn.disabled = false;
+    btn.textContent = "▶ START";
+    this.setStartStatus("");
+    btn.onclick = () => {
+      btn.disabled = true;
+      btn.textContent = "READY";
+      this.setStartStatus("Waiting for the other player to press START…");
+      onStart();
+    };
+  }
+  setStartStatus(text: string): void {
+    this.startGate.querySelector(".startgate-status")!.textContent = text;
+  }
+  hideStartGate(): void {
+    this.startGate.hidden = true;
+  }
+
   private rowHtml(side: Side, label: string): string {
     return `<div class="seal-row" data-side="${side}">
       <span class="seal-row-label">${label}</span>
@@ -225,6 +254,7 @@ class OverlayController {
     this.menu.hidden = false;
     this.lobby.hidden = true;
     this.prep.hidden = true;
+    this.startGate.hidden = true;
   }
   hideMenu(): void {
     this.menu.hidden = true;
