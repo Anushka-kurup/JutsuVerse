@@ -39,20 +39,20 @@ function title(element: SkillElement): string {
 
 export const SKILLS: SkillDef[] = [
   attack("FIRE", 1, ["rat", "ox", "tiger"]),
-  attack("FIRE", 2, ["rat", "ox", "tiger", "mizunoe"]),
-  attack("FIRE", 3, ["rat", "ox", "tiger", "mizunoe", "gassho"]),
+  attack("FIRE", 2, ["rat", "ox", "tiger", "ox"]),
+  attack("FIRE", 3, ["rat", "ox", "tiger", "ox", "rat"]),
 
   attack("WIND", 1, ["hare", "dragon", "snake"]),
-  attack("WIND", 2, ["hare", "dragon", "snake", "mizunoe"]),
-  attack("WIND", 3, ["hare", "dragon", "snake", "mizunoe", "gassho"]),
+  attack("WIND", 2, ["hare", "dragon", "snake", "dragon"]),
+  attack("WIND", 3, ["hare", "dragon", "snake", "dragon", "hare"]),
 
   attack("EARTH", 1, ["horse", "ram", "monkey"]),
-  attack("EARTH", 2, ["horse", "ram", "monkey", "mizunoe"]),
-  attack("EARTH", 3, ["horse", "ram", "monkey", "mizunoe", "gassho"]),
+  attack("EARTH", 2, ["horse", "ram", "monkey", "ram"]),
+  attack("EARTH", 3, ["horse", "ram", "monkey", "ram", "horse"]),
 
   attack("WATER", 1, ["bird", "dog", "boar"]),
-  attack("WATER", 2, ["bird", "dog", "boar", "mizunoe"]),
-  attack("WATER", 3, ["bird", "dog", "boar", "mizunoe", "gassho"]),
+  attack("WATER", 2, ["bird", "dog", "boar", "dog"]),
+  attack("WATER", 3, ["bird", "dog", "boar", "dog", "bird"]),
 
   {
     id: "shield",
