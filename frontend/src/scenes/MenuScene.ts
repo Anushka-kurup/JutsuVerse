@@ -20,7 +20,6 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(0, 0, STAGE_WIDTH, this.scale.height, 0x0b0f17).setOrigin(0);
 
     Overlay.showMenu();
-    Overlay.hideSealNow();
     Overlay.hideSealHud();
     Overlay.hideSkillPanel();
     Overlay.hideSkillTest();
