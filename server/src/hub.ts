@@ -2,6 +2,7 @@ import {
   ClientMsg,
   type HoldMsg,
   type InputMsg,
+  type MemeMsg,
   type ReadyMsg,
   type RepsMsg,
   type Seat,
@@ -13,6 +14,7 @@ import {
   markReady,
   matchStatePublic,
   receiveInput,
+  receiveMeme,
   receiveReps,
 } from "./match.ts";
 import {
@@ -96,6 +98,9 @@ function dispatch(ws: WebSocket, msg: ClientMsg): void {
     case "reps":
       onReps(ws, msg);
       return;
+    case "meme":
+      onMeme(ws, msg);
+      return;
     case "signal": {
       const loc = locationOf(ws);
       if (!loc) return;
@@ -172,13 +177,20 @@ function onReps(ws: WebSocket, msg: RepsMsg): void {
   loc.room.match = receiveReps(loc.room.match, loc.seat, msg);
 }
 
+function onMeme(ws: WebSocket, msg: MemeMsg): void {
+  const loc = locationOf(ws);
+  if (!loc) return;
+  loc.room.match = receiveMeme(loc.room.match, loc.seat, msg);
+}
+
 function onLeave(ws: WebSocket): void {
   const room = leaveSocket(ws);
   if (!room) return;
   if (room.players.size === 0) return;
 
   const remaining = [...room.players.values()][0];
-  if (room.match.phase === "live" || room.match.phase === "countdown") {
+  const activePhases = ["memegate", "live", "special", "memerace"];
+  if (activePhases.includes(room.match.phase)) {
     room.match = { ...room.match, phase: "ended", winner: remaining.seat };
   }
   send(remaining.ws, {

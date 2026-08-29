@@ -32,10 +32,15 @@ export const SeatSchema = z.enum(SEATS);
 export const PHASES = [
   "waiting",
   "connecting",
-  "countdown",
+  /** a random meme gesture is shown; first player to perform it starts the match */
+  "memegate",
   "live",
   /** the 6-7 rep contest, triggered every SPECIAL_TRIGGER_ATTACKS casts */
   "special",
+  /** a second, independent, ONE-TIME bonus round: a random meme gesture,
+   * triggered the first time either fighter's HP drops by MEME_RACE_HP_THRESHOLD
+   * — first to perform it heals MEME_HEAL HP */
+  "memerace",
   "ended",
 ] as const;
 export type Phase = (typeof PHASES)[number];
@@ -56,7 +61,6 @@ export const TICK_MS = 1000 / TICK_HZ;
 export const INPUT_DELAY_TICKS = 2;
 export const MAX_HP = 30;
 export const MAX_SHIELDS = 3;
-export const COUNTDOWN_TICKS = TICK_HZ * 4;
 export const CLASH_WINDOW_TICKS = TICK_HZ;
 export const SHIELD_MAX_TICKS = TICK_HZ * 3;
 
@@ -71,6 +75,19 @@ export const SPECIAL_HEAL = 10;
 export const SPECIAL_MAX_TICKS = TICK_HZ * 60;
 /** How long the result banner keeps riding along after the contest resolves. */
 export const SPECIAL_BANNER_TICKS = TICK_HZ * 3;
+
+// ── meme-gesture challenges (memegate starts a match; memerace is a bonus round) ──
+/** Hard cap for the pre-match gate; nobody managing it re-rolls a fresh label. */
+export const MEME_GATE_MAX_TICKS = TICK_HZ * 20;
+/** HP either fighter has to have lost (from full) to trigger the ONE-TIME mid-battle
+ * meme race. Doesn't re-arm afterward — it fires at most once per match. */
+export const MEME_RACE_HP_THRESHOLD = 2;
+/** HP restored to whoever performs the meme race's label first. */
+export const MEME_HEAL = 2;
+/** Hard cap for the mid-battle race; nobody managing it resolves as a no-op draw. */
+export const MEME_RACE_MAX_TICKS = TICK_HZ * 20;
+/** How long the result banner keeps riding along after the race resolves. */
+export const MEME_BANNER_TICKS = TICK_HZ * 3;
 
 export const JoinMsg = z.object({
   type: z.literal("join"),
@@ -122,6 +139,19 @@ export const RepsMsg = z.object({
 });
 export type RepsMsg = z.infer<typeof RepsMsg>;
 
+/**
+ * A confirmed meme gesture during memegate or memerace. Detected client-side
+ * (frontend/src/gesture/MemeBridge.ts); the server just checks whether it
+ * matches the currently active label and, if so, whether this seat is the
+ * first to report it.
+ */
+export const MemeMsg = z.object({
+  type: z.literal("meme"),
+  seq: z.number().int().nonnegative(),
+  label: z.string().min(1).max(64),
+});
+export type MemeMsg = z.infer<typeof MemeMsg>;
+
 export const LeaveMsg = z.object({ type: z.literal("leave") });
 
 export const ClientMsg = z.discriminatedUnion("type", [
@@ -130,6 +160,7 @@ export const ClientMsg = z.discriminatedUnion("type", [
   InputMsg,
   HoldMsg,
   RepsMsg,
+  MemeMsg,
   ReadyMsg,
   LeaveMsg,
 ]);
@@ -165,6 +196,22 @@ export interface SpecialPublic {
   healed: number;
 }
 
+/**
+ * A meme-gesture challenge as both clients see it — used for both memegate
+ * (starting the match) and memerace (the mid-battle bonus round).
+ */
+export interface MemeChallengePublic {
+  label: string;
+  /** ticks remaining before the hard cap; 0 once resolved */
+  ticksLeft: number;
+  /** which seats have already performed the label */
+  done: { a: boolean; b: boolean };
+  /** null while running; a "draw" only ever comes from a memerace timeout */
+  winner: Seat | "draw" | null;
+  /** HP actually restored — 0 for memegate, and 0 if already at full health */
+  healed: number;
+}
+
 export type ServerMsg =
   | {
       type: "joined";
@@ -185,9 +232,9 @@ export type ServerMsg =
       /** per-seat gate flags so clients can say "waiting for opponent" */
       cam?: { a: boolean; b: boolean };
       ready?: { a: boolean; b: boolean };
-      /** 3, 2, 1, or 0 while the authoritative countdown is running. */
-      countdown?: number | null;
       /** present during the 6-7 contest and for a few ticks after it resolves */
       special?: SpecialPublic;
+      /** present during memegate/memerace and for a few ticks after either resolves */
+      memeChallenge?: MemeChallengePublic;
     }
   | { type: "error"; code: string; message: string };
