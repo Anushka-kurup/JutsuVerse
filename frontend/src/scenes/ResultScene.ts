@@ -32,7 +32,7 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const btn = this.add
-      .text(cx, cy + 44, "▶  REMATCH", {
+      .text(cx, cy + 44, "▶  READY", {
         fontFamily: "monospace",
         fontSize: "20px",
         color: "#eef1f8",
@@ -45,8 +45,8 @@ export class ResultScene extends Phaser.Scene {
     btn.on("pointerover", () => btn.setStyle({ backgroundColor: "#3d67e6" }));
     btn.on("pointerout", () => btn.setStyle({ backgroundColor: "#4f7dff" }));
     btn.on("pointerdown", () => {
-      net.reset();
-      btn.setText("…");
+      net.rematchReady();
+      btn.disableInteractive().setText("WAITING FOR OPPONENT…");
     });
 
     bus.on(Events.NET_MATCH, this.onMatch, this);

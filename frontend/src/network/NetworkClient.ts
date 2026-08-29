@@ -20,6 +20,7 @@ export class NetworkClient {
   private seat: Seat | null = null;
   private code = "";
   private peer = false;
+  private heldSign: Sign | null = null;
 
   myId = "";
 
@@ -105,11 +106,13 @@ export class NetworkClient {
         break;
       }
       case "match_state":
+        if (msg.phase === "ended") this.heldSign = null;
         bus.emit(Events.NET_MATCH, {
           phase: msg.phase,
           winner: msg.winner ?? null,
           cam: msg.cam,
           ready: msg.ready,
+          countdown: msg.countdown ?? null,
         });
         break;
       case "error":
@@ -128,9 +131,22 @@ export class NetworkClient {
     this.input(sign, "up");
   }
 
+  /** Stream only changes in the currently recognized valid gesture. */
+  setHeldSign(sign: string | null): void {
+    const valid = sign !== null && isSign(sign) ? sign : null;
+    if (valid === this.heldSign) return;
+    this.heldSign = valid;
+    this.sock.send({
+      type: "hold",
+      seq: ++this.seq,
+      sign: valid,
+      tClient: performance.now(),
+    });
+  }
+
   /** stage 1: the local camera is on */
-  cameraReady(): void {
-    this.sock.send({ type: "ready", stage: "camera" });
+  cameraReady(enabled = true): void {
+    this.sock.send({ type: "ready", stage: "camera", enabled });
   }
 
   /** stage 2: this player pressed Start */
@@ -138,9 +154,8 @@ export class NetworkClient {
     this.sock.send({ type: "ready", stage: "start" });
   }
 
-  reset(): void {
-    this.sock.send({ type: "reset" });
-    this.sock.send({ type: "ready", stage: "camera" }); // rematch: camera is still on
+  rematchReady(): void {
+    this.sock.send({ type: "ready", stage: "rematch" });
   }
 
   /** WebRTC signalling passthrough for VideoCall */
@@ -156,7 +171,7 @@ export class NetworkClient {
 // keep in sync with @jutsu/protocol SIGNS
 const SIGN_SET = new Set([
   "rat", "ox", "tiger", "hare", "dragon", "snake", "horse",
-  "ram", "monkey", "bird", "dog", "boar", "gassho", "mizunoe",
+  "ram", "monkey", "bird", "dog", "boar", "mizunoe", "gassho",
 ]);
 function isSign(s: string): s is Sign {
   return SIGN_SET.has(s);

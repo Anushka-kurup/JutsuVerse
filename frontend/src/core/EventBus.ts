@@ -38,7 +38,7 @@ export const Events = {
   // ── derived battle beats (StateSync reads FighterPublic deltas) ──
   SKILL_FIRED: "skill-fired", // ({ side: Side, skillId: string })
   OPP_SEALS: "opp-seals", // (ids: string[])
-  OPP_SIGN: "opp-sign", // (id: string)
+  OPP_SIGN: "opp-sign", // (id: string | null)
   DAMAGE: "damage", // ({ side: Side, amount: number })
   DEFENSE: "defense", // ({ side: Side, kind: "REFLECT" | "PROTECT" | null })
   MATCH_OVER: "match-over", // ({ winner: string, iWon: boolean })

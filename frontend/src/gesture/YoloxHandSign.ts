@@ -194,6 +194,8 @@ export class YoloxHandSign {
             bestObj = obj;
           }
           if (score <= NMS_SCORE_TH) continue;
+          const sign = signByIndex(classId);
+          if (!sign) continue; // raw model classes 14 and 15 are not game signs
 
           const cx = (raw[o] + gx) * stride;
           const cy = (raw[o + 1] + gy) * stride;
@@ -201,7 +203,7 @@ export class YoloxHandSign {
           const h = Math.exp(raw[o + 3]) * stride;
           candidates.push({
             index: classId,
-            id: signByIndex(classId)?.id ?? `class_${classId}`,
+            id: sign.id,
             score,
             box: [
               clamp((cx - w / 2) / ratio, 0, maxW),
@@ -218,10 +220,10 @@ export class YoloxHandSign {
     this.debug.valueRange = [Number.isFinite(vMin) ? vMin : 0, Number.isFinite(vMax) ? vMax : 0];
     this.debug.top = Array.from(scoreByClass, (score, index) => ({
       index,
-      id: signByIndex(index)?.id ?? `class_${index}`,
+      id: signByIndex(index)?.id ?? "",
       score,
     }))
-      .filter((e) => e.score > 0.01)
+      .filter((e) => e.id !== "" && e.score > 0.01)
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
 

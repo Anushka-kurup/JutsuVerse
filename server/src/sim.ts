@@ -1,25 +1,33 @@
 import {
   MAX_HP,
   MAX_SHIELDS,
+  SHIELD_MAX_TICKS,
+  TICK_HZ,
   type Edge,
   type FighterPublic,
   type Sign,
   type Stance,
 } from "@jutsu/protocol";
 import {
-  commandById,
+  ATTACKS,
+  attackById,
   consumeSuffix,
-  matchBuffer,
+  matchAttack,
+  matchesShield,
+  SHIELD,
+  type AttackCommand,
   type BufferEvent,
-  type Command,
 } from "./commands.ts";
 
-export const STARTUP_TICKS = 7;
-export const ACTIVE_TICKS = 3;
-export const RECOVER_TICKS = 5;
-export const HITSTUN_TICKS = 6;
-export const BUFFER_TICKS = 700; // ~35 s at 20 Hz — long enough for camera-paced seal combos
-export const GUARD_TICKS = 40;
+const BUFFER_TICKS = TICK_HZ * 40;
+const MAX_BUFFERED_SIGNS = 5;
+const LEVEL_FINALIZE_TICKS = TICK_HZ;
+const HITSTUN_TICKS = 6;
+
+interface AttackCandidate {
+  commandId: string;
+  readyAtTick: number;
+}
 
 export interface Fighter {
   hp: number;
@@ -29,10 +37,15 @@ export interface Fighter {
   lastSkill: string | null;
   lastSkillTick: number;
   stanceUntilTick: number;
-  activeFromTick: number;
-  attackDamage: number;
-  held: Sign[];
+  currentHold: Sign | null;
+  shieldUntilTick: number;
   buffer: BufferEvent[];
+  candidate: AttackCandidate | null;
+}
+
+export interface FighterStep {
+  fighter: Fighter;
+  attack: AttackCommand | null;
 }
 
 export function createFighter(): Fighter {
@@ -44,178 +57,180 @@ export function createFighter(): Fighter {
     lastSkill: null,
     lastSkillTick: -1,
     stanceUntilTick: 0,
-    activeFromTick: -1,
-    attackDamage: 0,
-    held: [],
+    currentHold: null,
+    shieldUntilTick: 0,
     buffer: [],
+    candidate: null,
   };
 }
 
-export function applyEdge(
-  f: Fighter,
-  sign: Sign,
-  edge: Edge,
-  tick: number,
-): Fighter {
-  const held = new Set(f.held);
-  let buffer = f.buffer;
-  if (edge === "down") {
-    if (!held.has(sign)) {
-      held.add(sign);
-      buffer = [...buffer, { sign, tick }];
-    }
-  } else {
-    held.delete(sign);
-  }
-  return { ...f, held: [...held], buffer };
+/** A confirmed seal is represented by the down edge; up only closes the input edge. */
+export function applyEdge(f: Fighter, sign: Sign, edge: Edge, tick: number): Fighter {
+  if (edge === "up") return f;
+  if (f.buffer[f.buffer.length - 1]?.sign === sign) return f;
+  return {
+    ...f,
+    buffer: [...f.buffer, { sign, tick }].slice(-MAX_BUFFERED_SIGNS),
+  };
 }
 
-function timings(moveId: string | null): Command | undefined {
-  return moveId ? commandById(moveId) : undefined;
+/** Live recognized gesture, separate from confirmed sequence input. */
+export function applyHold(f: Fighter, sign: Sign | null): Fighter {
+  return { ...f, currentHold: sign };
 }
 
-export function stepFighter(f: Fighter, tick: number): Fighter {
+export function stepFighter(f: Fighter, tick: number, canAttack = true): FighterStep {
   let next: Fighter = {
     ...f,
-    held: [...f.held],
-    buffer: f.buffer.filter((e) => tick - e.tick <= BUFFER_TICKS),
+    buffer: f.buffer.filter((event) => tick - event.tick <= BUFFER_TICKS),
   };
 
-  if (next.stance === "startup" && tick >= next.stanceUntilTick) {
-    const move = timings(next.moveId);
-    const active = move?.activeTicks ?? ACTIVE_TICKS;
-    next = {
-      ...next,
-      stance: "active",
-      stanceUntilTick: tick + active,
-      activeFromTick: tick,
-    };
-  } else if (next.stance === "active" && tick >= next.stanceUntilTick) {
-    const move = timings(next.moveId);
-    const recover = move?.recoverTicks ?? RECOVER_TICKS;
-    next = {
-      ...next,
-      stance: "recover",
-      stanceUntilTick: tick + recover,
-      activeFromTick: -1,
-    };
+  if (next.stance === "hitstun" && tick >= next.stanceUntilTick) {
+    next = { ...next, stance: "idle", moveId: null, stanceUntilTick: 0 };
+  } else if (next.stance === "startup" && tick >= next.stanceUntilTick) {
+    next = { ...next, stance: "recover", stanceUntilTick: tick + 5 };
   } else if (next.stance === "recover" && tick >= next.stanceUntilTick) {
-    next = {
-      ...next,
-      stance: "idle",
-      moveId: null,
-      stanceUntilTick: 0,
-      attackDamage: 0,
-    };
-  } else if (next.stance === "hitstun" && tick >= next.stanceUntilTick) {
-    next = {
-      ...next,
-      stance: "idle",
-      moveId: null,
-      stanceUntilTick: 0,
-      attackDamage: 0,
-    };
-  } else if (next.stance === "block" && tick >= next.stanceUntilTick) {
-    next = {
-      ...next,
-      stance: "idle",
-      moveId: null,
-      stanceUntilTick: 0,
-      attackDamage: 0,
-    };
+    next = { ...next, stance: "idle", moveId: null, stanceUntilTick: 0 };
   }
 
-  if (next.stance === "idle" || next.stance === "startup") {
-    const cmd = matchBuffer(next.buffer, tick);
-    if (cmd?.move === "guard") {
+  if (next.stance === "block") {
+    if (next.currentHold !== "mizunoe" || tick >= next.shieldUntilTick) {
       next = {
         ...next,
-        stance: "block",
-        moveId: cmd.id,
-        lastSkill: cmd.id,
-        lastSkillTick: tick,
-        stanceUntilTick: tick + cmd.guardTicks,
-        activeFromTick: -1,
-        attackDamage: 0,
-        buffer: consumeSuffix(next.buffer, cmd.seq.length),
+        stance: "idle",
+        moveId: null,
+        shieldUntilTick: 0,
       };
-    } else if (cmd?.move === "attack" && next.stance === "idle") {
-      next = {
-        ...next,
-        stance: "startup",
-        moveId: cmd.id,
-        lastSkill: cmd.id,
-        lastSkillTick: tick,
-        stanceUntilTick: tick + cmd.startupTicks,
-        attackDamage: cmd.damage,
-        buffer: consumeSuffix(next.buffer, cmd.seq.length),
+    } else {
+      return { fighter: next, attack: null };
+    }
+  }
+
+  if (
+    next.shields > 0 &&
+    next.currentHold === "mizunoe" &&
+    matchesShield(next.buffer)
+  ) {
+    next = {
+      ...next,
+      stance: "block",
+      moveId: SHIELD.id,
+      lastSkill: SHIELD.id,
+      lastSkillTick: tick,
+      shieldUntilTick: tick + SHIELD_MAX_TICKS,
+      buffer: consumeSuffix(next.buffer, SHIELD.seq.length),
+      candidate: null,
+    };
+    return { fighter: next, attack: null };
+  }
+
+  if (next.stance !== "idle") return { fighter: next, attack: null };
+
+  if (!canAttack) {
+    return { fighter: next, attack: null };
+  }
+
+  const command = matchAttack(next.buffer);
+  if (!command) {
+    return { fighter: { ...next, candidate: null }, attack: null };
+  }
+
+  // Level 1 and 2 are prefixes of stronger attacks. Give the player enough
+  // time to confirm the next camera sign; Level 3 is unambiguous and fires now.
+  if (command.level < 3) {
+    if (next.candidate?.commandId !== command.id) {
+      return {
+        fighter: {
+          ...next,
+          candidate: {
+            commandId: command.id,
+            readyAtTick: tick + LEVEL_FINALIZE_TICKS,
+          },
+        },
+        attack: null,
+      };
+    }
+    if (tick < next.candidate.readyAtTick) {
+      return { fighter: next, attack: null };
+    }
+    const stronger = ATTACKS.find(
+      (candidate) =>
+        candidate.element === command.element && candidate.level === command.level + 1,
+    );
+    const extensionSign = stronger?.seq[command.seq.length];
+    if (extensionSign && next.currentHold === extensionSign) {
+      return {
+        fighter: {
+          ...next,
+          candidate: { ...next.candidate, readyAtTick: tick + 1 },
+        },
+        attack: null,
       };
     }
   }
 
-  return next;
+  return castAttack(next, command, tick);
 }
 
-export function guardedDamage(raw: number): number {
-  return Math.max(1, Math.floor(raw / 2));
+function castAttack(f: Fighter, command: AttackCommand, tick: number): FighterStep {
+  return {
+    fighter: {
+      ...f,
+      stance: "startup",
+      moveId: command.id,
+      lastSkill: command.id,
+      lastSkillTick: tick,
+      stanceUntilTick: tick + 6,
+      buffer: consumeSuffix(f.buffer, command.seq.length),
+      candidate: null,
+    },
+    attack: command,
+  };
 }
 
-export function takeHit(f: Fighter, tick: number, damage: number): Fighter {
+export function blockAttack(f: Fighter): Fighter {
+  return {
+    ...f,
+    shields: Math.max(0, f.shields - 1),
+    stance: "idle",
+    moveId: null,
+    shieldUntilTick: 0,
+  };
+}
+
+export function takeDamage(
+  f: Fighter,
+  tick: number,
+  damage: number,
+  clearBuffer = false,
+): Fighter {
   return {
     ...f,
     hp: Math.max(0, f.hp - damage),
-    stance: "hitstun",
-    moveId: null,
-    stanceUntilTick: tick + HITSTUN_TICKS,
-    activeFromTick: -1,
-    attackDamage: 0,
+    stance: damage > 0 ? "hitstun" : f.stance,
+    moveId: damage > 0 ? null : f.moveId,
+    stanceUntilTick: damage > 0 ? tick + HITSTUN_TICKS : f.stanceUntilTick,
+    shieldUntilTick: damage > 0 ? 0 : f.shieldUntilTick,
+    buffer: clearBuffer ? [] : f.buffer,
+    candidate: clearBuffer ? null : f.candidate,
   };
-}
-
-/** Hits fire on the first active tick of a move, not every active tick. */
-export function resolveHits(
-  a: Fighter,
-  b: Fighter,
-  tick: number,
-): { a: Fighter; b: Fighter } {
-  let nextA = a;
-  let nextB = b;
-  const aStrike = a.stance === "active" && a.activeFromTick === tick;
-  const bStrike = b.stance === "active" && b.activeFromTick === tick;
-  const aDmg = a.attackDamage || 2;
-  const bDmg = b.attackDamage || 2;
-
-  if (aStrike && b.stance !== "hitstun") {
-    if (b.stance === "block") {
-      nextB = { ...b, hp: Math.max(0, b.hp - guardedDamage(aDmg)) };
-    } else if (b.shields > 0) {
-      nextB = takeHit({ ...b, shields: b.shields - 1 }, tick, 0);
-    } else {
-      nextB = takeHit(b, tick, aDmg);
-    }
-  }
-  if (bStrike && nextA.stance !== "hitstun") {
-    if (nextA.stance === "block") {
-      nextA = { ...nextA, hp: Math.max(0, nextA.hp - guardedDamage(bDmg)) };
-    } else if (nextA.shields > 0) {
-      nextA = takeHit({ ...nextA, shields: nextA.shields - 1 }, tick, 0);
-    } else {
-      nextA = takeHit(nextA, tick, bDmg);
-    }
-  }
-  return { a: nextA, b: nextB };
 }
 
 export function toPublic(f: Fighter, tick: number): FighterPublic {
   return {
-    hp: Math.round(f.hp),
+    hp: f.hp,
     shields: f.shields,
     stance: f.stance,
     moveId: f.moveId,
     lastSkill: f.lastSkill,
     lastSkillTick: f.lastSkillTick,
-    buffer: f.buffer.map((e) => e.sign).slice(-6),
-    held: [...f.held],
-    guardLeft: f.stance === "block" ? Math.max(0, f.stanceUntilTick - tick) : 0,
+    buffer: f.buffer.map((event) => event.sign),
+    held: f.currentHold ? [f.currentHold] : [],
+    guardLeft: f.stance === "block" ? Math.max(0, f.shieldUntilTick - tick) : 0,
+    shieldActive: f.stance === "block",
   };
+}
+
+export function commandFor(id: string): AttackCommand | undefined {
+  return attackById(id);
 }

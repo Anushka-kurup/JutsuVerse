@@ -1,12 +1,13 @@
 import {
   ClientMsg,
+  type HoldMsg,
   type InputMsg,
   type ReadyMsg,
   type Seat,
   type ServerMsg,
 } from "@jutsu/protocol";
 import type { RawData, WebSocket } from "ws";
-import { markReady, publicState, receiveInput, restartMatch } from "./match.ts";
+import { countdownValue, createMatch, markReady, publicState, receiveInput } from "./match.ts";
 import {
   joinRoom,
   leaveSocket,
@@ -25,6 +26,7 @@ function matchState(room: Room): ServerMsg {
     winner: room.match.winner,
     cam: room.match.cam,
     ready: room.match.ready,
+    countdown: countdownValue(room.match),
   };
 }
 
@@ -83,9 +85,12 @@ function dispatch(ws: WebSocket, msg: ClientMsg): void {
       onJoin(ws, msg.code, msg.name);
       return;
     case "ready":
-      onReady(ws, msg.stage);
+      onReady(ws, msg.stage, msg.enabled);
       return;
     case "input":
+      onInput(ws, msg);
+      return;
+    case "hold":
       onInput(ws, msg);
       return;
     case "signal": {
@@ -98,21 +103,10 @@ function dispatch(ws: WebSocket, msg: ClientMsg): void {
       );
       return;
     }
-    case "reset":
-      onReset(ws);
-      return;
     case "leave":
       onLeave(ws);
       return;
   }
-}
-
-function onReset(ws: WebSocket): void {
-  const loc = locationOf(ws);
-  if (!loc) return;
-  loc.room.match = restartMatch(loc.room.players.keys());
-  broadcast(loc.room, matchState(loc.room));
-  broadcast(loc.room, { type: "state", ...publicState(loc.room.match) });
 }
 
 function onJoin(ws: WebSocket, code?: string, name?: string): void {
@@ -127,7 +121,7 @@ function onJoin(ws: WebSocket, code?: string, name?: string): void {
 
   const { room, player } = joinRoom(ws, { code, name });
   if (room.players.size === 2 && room.match.phase === "ended") {
-    room.match = restartMatch([]);
+    room.match = createMatch();
   }
   send(ws, {
     type: "joined",
@@ -152,14 +146,18 @@ function onJoin(ws: WebSocket, code?: string, name?: string): void {
   }
 }
 
-function onReady(ws: WebSocket, stage: ReadyMsg["stage"]): void {
+function onReady(
+  ws: WebSocket,
+  stage: ReadyMsg["stage"],
+  enabled?: boolean,
+): void {
   const loc = locationOf(ws);
   if (!loc) return;
-  loc.room.match = markReady(loc.room.match, loc.seat, stage);
+  loc.room.match = markReady(loc.room.match, loc.seat, stage, enabled ?? true);
   broadcast(loc.room, matchState(loc.room));
 }
 
-function onInput(ws: WebSocket, msg: InputMsg): void {
+function onInput(ws: WebSocket, msg: InputMsg | HoldMsg): void {
   const loc = locationOf(ws);
   if (!loc) return;
   loc.room.match = receiveInput(loc.room.match, loc.seat, msg);
@@ -171,7 +169,7 @@ function onLeave(ws: WebSocket): void {
   if (room.players.size === 0) return;
 
   const remaining = [...room.players.values()][0];
-  if (room.match.phase === "live") {
+  if (room.match.phase === "live" || room.match.phase === "countdown") {
     room.match = { ...room.match, phase: "ended", winner: remaining.seat };
   }
   send(remaining.ws, {
