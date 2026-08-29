@@ -1,6 +1,6 @@
 export type SkillAction = "ATTACK" | "SHIELD";
-export type SkillElement = "FIRE" | "WATER" | "WIND" | "EARTH";
-export type SkillLevel = 1 | 2 | 3;
+export type SkillElement = "FIRE" | "WATER" | "EARTH";
+export type SkillLevel = 1 | 2;
 
 export interface SkillDef {
   id: string;
@@ -15,30 +15,23 @@ export interface SkillDef {
   image: string | null;
 }
 
-const DAMAGE: Record<SkillLevel, number> = { 1: 1, 2: 2, 3: 4 };
+const DAMAGE: Record<SkillLevel, number> = { 1: 3, 2: 5 };
 
 /**
- * 3-seal base per element. Level 2 appends one "amp" seal; level 3 appends that
- * same amp seal plus 祈 Gassho.
+ * 3-seal base per element. Level 2 appends one "amp" seal.
  * (壬 Mizunoe used to be the shared amp seal, but the detector can't recognise
  *  it, so each element gets a distinct amp seal that is NOT part of its own base
  *  — that keeps every sequence free of back-to-back duplicates.)
  */
 const BASE: Record<SkillElement, string[]> = {
-  FIRE: ["rat", "ox", "tiger"],
-  WIND: ["hare", "dragon", "snake"],
-  EARTH: ["horse", "ram", "monkey"],
-  WATER: ["bird", "dog", "boar"],
+  FIRE: ["ox", "hare", "rat"],
+  EARTH: ["dragon", "tiger", "dog"],
+  WATER: ["ram", "monkey", "snake"],
 };
-const AMP: Record<SkillElement, string> = { FIRE: "dog", WIND: "monkey", EARTH: "dragon", WATER: "tiger" };
+const AMP: Record<SkillElement, string> = { FIRE: "boar", EARTH: "bird", WATER: "horse" };
 
 const attack = (element: SkillElement, level: SkillLevel): SkillDef => {
-  const seals =
-    level === 1
-      ? [...BASE[element]]
-      : level === 2
-        ? [...BASE[element], AMP[element]]
-        : [...BASE[element], AMP[element], "gassho"];
+  const seals = level === 1 ? [...BASE[element]] : [...BASE[element], AMP[element]];
   return {
     id: `${element.toLowerCase()}_${level}`,
     name: `${title(element)} Attack · Level ${level}`,
@@ -59,19 +52,12 @@ function title(element: SkillElement): string {
 export const SKILLS: SkillDef[] = [
   attack("FIRE", 1),
   attack("FIRE", 2),
-  attack("FIRE", 3),
-
-  attack("WIND", 1),
-  attack("WIND", 2),
-  attack("WIND", 3),
 
   attack("EARTH", 1),
   attack("EARTH", 2),
-  attack("EARTH", 3),
 
   attack("WATER", 1),
   attack("WATER", 2),
-  attack("WATER", 3),
 
   {
     id: "shield",
@@ -92,3 +78,17 @@ export const SHIELD_HOLD_SIGN = "snake";
 const BY_ID = new Map(SKILLS.map((s) => [s.id, s]));
 export const skillById = (id: string): SkillDef | undefined => BY_ID.get(id);
 export const MAX_SEAL_SEQUENCE = Math.max(...SKILLS.map((s) => s.seals.length));
+
+/**
+ * The shortest skill whose seal sequence begins with `ids` — i.e. the jutsu the
+ * player is currently forming. Sequences don't overlap, so this is unambiguous
+ * (L1 and its L2 extension share a prefix; the shorter one is returned).
+ */
+export function skillForPrefix(ids: string[]): SkillDef | undefined {
+  if (ids.length === 0) return undefined;
+  return [...SKILLS]
+    .filter(
+      (s) => s.seals.length >= ids.length && ids.every((id, i) => s.seals[i] === id),
+    )
+    .sort((a, b) => a.seals.length - b.seals.length)[0];
+}

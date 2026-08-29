@@ -17,17 +17,17 @@ rematches.
 
 ## Combat rules
 
-- Elements counter in this cycle: `Fire > Wind > Earth > Water > Fire`.
+- Elements counter in this cycle: `Water > Fire > Earth > Water`.
 - Level 1 uses three signs and deals 1 base damage.
-- Level 2 adds sign 12 and deals 2 base damage.
-- Level 3 adds signs 12 and 13 and deals 4 base damage.
+- Level 2 adds one amp seal and deals 2 base damage.
 - Attacks performed within one second clash. Elemental advantage deals the
   winner's base damage and the winner takes none; otherwise both attacks land
   for their own base damage.
 - An unopposed attack deals its base damage and clears the defender's stored
   signs.
 - Shield is signs `13, 12`; sign 12 must remain held. It lasts at most three
-  seconds, blocks one attack for zero damage, and consumes one of three shields.
+  seconds, blocks one attack for zero damage, and consumes one of three
+  charges when raised.
 - Every five attacks by both players combined, combat freezes for the **6-7
   contest**: both players perform the 6-7 gesture on camera and the first to 67
   reps restores 10 HP (nothing happens if they are already at full health). A

@@ -14,16 +14,20 @@ import {
   consumeSuffix,
   matchAttack,
   matchesShield,
+  pruneBuffer,
   SHIELD,
   type AttackCommand,
   type BufferEvent,
 } from "./commands.ts";
+import { MAX_SEAL_SEQUENCE } from "../../shared/skills.ts";
 
 /** Seal you must keep held to sustain the shield (last seal of the shield sequence). */
 const SHIELD_HOLD_SIGN: Sign = SHIELD.seq[SHIELD.seq.length - 1];
 
 const BUFFER_TICKS = TICK_HZ * 40;
-const MAX_BUFFERED_SIGNS = 5;
+// pruning keeps the buffer a live skill prefix, so it can never exceed the
+// longest sequence anyway — this is just a hard safety cap.
+const MAX_BUFFERED_SIGNS = MAX_SEAL_SEQUENCE;
 const LEVEL_FINALIZE_TICKS = TICK_HZ;
 const HITSTUN_TICKS = 6;
 
@@ -42,6 +46,8 @@ export interface Fighter {
   stanceUntilTick: number;
   currentHold: Sign | null;
   shieldUntilTick: number;
+  /** After a timed-out shield, block a recast until the hold is released. */
+  shieldLock: boolean;
   buffer: BufferEvent[];
   candidate: AttackCandidate | null;
 }
@@ -62,6 +68,7 @@ export function createFighter(): Fighter {
     stanceUntilTick: 0,
     currentHold: null,
     shieldUntilTick: 0,
+    shieldLock: false,
     buffer: [],
     candidate: null,
   };
@@ -71,10 +78,8 @@ export function createFighter(): Fighter {
 export function applyEdge(f: Fighter, sign: Sign, edge: Edge, tick: number): Fighter {
   if (edge === "up") return f;
   if (f.buffer[f.buffer.length - 1]?.sign === sign) return f;
-  return {
-    ...f,
-    buffer: [...f.buffer, { sign, tick }].slice(-MAX_BUFFERED_SIGNS),
-  };
+  const grown = pruneBuffer([...f.buffer, { sign, tick }]);
+  return { ...f, buffer: grown.slice(-MAX_BUFFERED_SIGNS) };
 }
 
 /** Live recognized gesture, separate from confirmed sequence input. */
@@ -88,6 +93,10 @@ export function stepFighter(f: Fighter, tick: number, canAttack = true): Fighter
     buffer: f.buffer.filter((event) => tick - event.tick <= BUFFER_TICKS),
   };
 
+  if (next.currentHold !== SHIELD_HOLD_SIGN) {
+    next = { ...next, shieldLock: false };
+  }
+
   if (next.stance === "hitstun" && tick >= next.stanceUntilTick) {
     next = { ...next, stance: "idle", moveId: null, stanceUntilTick: 0 };
   } else if (next.stance === "startup" && tick >= next.stanceUntilTick) {
@@ -97,25 +106,32 @@ export function stepFighter(f: Fighter, tick: number, canAttack = true): Fighter
   }
 
   if (next.stance === "block") {
-    if (next.currentHold !== SHIELD_HOLD_SIGN || tick >= next.shieldUntilTick) {
+    const holdLost = next.currentHold !== SHIELD_HOLD_SIGN;
+    const timedOut = tick >= next.shieldUntilTick;
+    if (holdLost || timedOut) {
       next = {
         ...next,
         stance: "idle",
         moveId: null,
         shieldUntilTick: 0,
+        shieldLock: timedOut && !holdLost,
       };
+      if (timedOut && !holdLost) return { fighter: next, attack: null };
     } else {
       return { fighter: next, attack: null };
     }
   }
 
   if (
+    !next.shieldLock &&
     next.shields > 0 &&
     next.currentHold === SHIELD_HOLD_SIGN &&
     matchesShield(next.buffer)
   ) {
     next = {
       ...next,
+      shields: next.shields - 1,
+      shieldLock: false,
       stance: "block",
       moveId: SHIELD.id,
       lastSkill: SHIELD.id,
@@ -138,9 +154,9 @@ export function stepFighter(f: Fighter, tick: number, canAttack = true): Fighter
     return { fighter: { ...next, candidate: null }, attack: null };
   }
 
-  // Level 1 and 2 are prefixes of stronger attacks. Give the player enough
-  // time to confirm the next camera sign; Level 3 is unambiguous and fires now.
-  if (command.level < 3) {
+  // Level 1 is a prefix of Level 2. Give the player enough time to confirm the
+  // next camera sign; Level 2 is unambiguous and fires now.
+  if (command.level < 2) {
     if (next.candidate?.commandId !== command.id) {
       return {
         fighter: {
@@ -194,10 +210,10 @@ function castAttack(f: Fighter, command: AttackCommand, tick: number): FighterSt
 export function blockAttack(f: Fighter): Fighter {
   return {
     ...f,
-    shields: Math.max(0, f.shields - 1),
     stance: "idle",
     moveId: null,
     shieldUntilTick: 0,
+    shieldLock: false,
   };
 }
 

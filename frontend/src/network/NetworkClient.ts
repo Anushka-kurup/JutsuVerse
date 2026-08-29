@@ -44,6 +44,8 @@ export class NetworkClient {
   private heldSign: Sign | null = null;
 
   myId = "";
+  myName = "";
+  peerName = "";
 
   constructor() {
     this.sock.onopen = () => bus.emit(Events.NET_OPEN);
@@ -100,19 +102,24 @@ export class NetworkClient {
         this.seat = msg.seat;
         this.code = msg.code;
         this.peer = msg.peerPresent;
+        this.myName = msg.name;
         bus.emit(Events.NET_JOINED, {
           code: msg.code,
           seat: msg.seat,
           peerPresent: msg.peerPresent,
         });
+        bus.emit(Events.NET_NAMES, { me: this.myName, opp: this.peerName });
         if (msg.peerPresent) bus.emit(Events.PEER_JOINED);
         break;
       case "peer_joined":
         this.peer = true;
+        this.peerName = msg.name;
+        bus.emit(Events.NET_NAMES, { me: this.myName, opp: this.peerName });
         bus.emit(Events.PEER_JOINED);
         break;
       case "peer_left":
         this.peer = false;
+        this.peerName = "";
         bus.emit(Events.PEER_LEFT);
         break;
       case "state": {

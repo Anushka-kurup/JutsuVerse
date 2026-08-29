@@ -3,7 +3,6 @@ import Phaser from "phaser";
 const ELEMENT_COLOR: Record<string, number> = {
   FIRE: 0xff7043,
   WATER: 0x35a7ff,
-  WIND: 0x74e39b,
   EARTH: 0xc38b52,
 };
 
@@ -15,6 +14,8 @@ export interface ProjectileOpts {
   element: string;
   skillId: string;
   level: number;
+  /** Launch size for the art, in px — set to whatever the charge grew to. */
+  artSize?: number;
   onArrive?: () => void;
 }
 
@@ -33,18 +34,26 @@ export class SkillEffect {
   ) {
     const color = ELEMENT_COLOR[opts.element] ?? 0xffffff;
     const dir = Math.sign(opts.toX - opts.fromX) || 1;
+    // Level 1 flies as a small tight bolt; Level 2 gets a big halo
+    const l2 = opts.level >= 2;
+    const g = l2 ? 1 : 0.4;
 
-    const glow = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(7).setAlpha(0.28);
+    const glow = scene.add
+      .image(opts.fromX, opts.fromY, "disc")
+      .setTint(color)
+      .setScale(l2 ? 11 : 2.4)
+      .setAlpha(l2 ? 0.3 : 0.22);
     glow.setBlendMode(Phaser.BlendModes.ADD);
-    const orb = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(3.6);
+    const orb = scene.add.image(opts.fromX, opts.fromY, "disc").setTint(color).setScale(3.2 * g);
     orb.setBlendMode(Phaser.BlendModes.ADD);
     this.parts.push(glow, orb);
 
     const textureKey = `jutsu-${opts.skillId}`;
+    const artSize = opts.artSize ?? 100 + opts.level * 24;
     const art = scene.textures.exists(textureKey)
       ? scene.add
           .image(opts.fromX, opts.fromY, textureKey)
-          .setDisplaySize(100 + opts.level * 24, 100 + opts.level * 24)
+          .setDisplaySize(artSize, artSize)
           .setFlipX(dir > 0)
           .setDepth(8)
       : null;
@@ -55,9 +64,9 @@ export class SkillEffect {
       speed: { min: 20, max: 90 },
       angle: { min: 160 - dir * 20, max: 200 - dir * 20 },
       lifespan: 420,
-      scale: { start: 2.2, end: 0 },
+      scale: { start: 2.2 * g, end: 0 },
       tint: color,
-      quantity: 3,
+      quantity: opts.level >= 2 ? 3 : 2,
       blendMode: "ADD",
     });
     this.parts.push(trail);

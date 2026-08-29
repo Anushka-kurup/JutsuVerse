@@ -54,15 +54,15 @@ export const StanceSchema = z.enum(STANCES);
 export const TICK_HZ = 20;
 export const TICK_MS = 1000 / TICK_HZ;
 export const INPUT_DELAY_TICKS = 2;
-export const MAX_HP = 20;
+export const MAX_HP = 30;
 export const MAX_SHIELDS = 3;
 export const COUNTDOWN_TICKS = TICK_HZ * 4;
 export const CLASH_WINDOW_TICKS = TICK_HZ;
-export const SHIELD_MAX_TICKS = TICK_HZ * 10;
+export const SHIELD_MAX_TICKS = TICK_HZ * 3;
 
 // ── 6-7 special contest ─────────────────────────────────────────────
 /** Combined casts by BOTH fighters that trigger the contest. Resets each time. */
-export const SPECIAL_TRIGGER_ATTACKS = 5;
+export const SPECIAL_TRIGGER_ATTACKS = 10;
 /** Reps to win outright. One rep = one confirmed alternation (see lab/counter.ts). */
 export const SPECIAL_TARGET_REPS = 67;
 /** HP restored to the winner, clamped to MAX_HP. */

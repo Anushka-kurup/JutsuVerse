@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { bus, Events } from "../core/EventBus";
 import { SPAWN } from "../core/GameConfig";
+import { music } from "../core/Music";
+import { sfx } from "../core/Sfx";
 import { net } from "../core/Session";
 import { Character } from "../entities/Character";
 import { GestureBridge } from "../gesture/GestureBridge";
@@ -89,6 +91,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown-D", this.toggleDebug, this);
     this.input.keyboard?.on("keydown-G", this.toggleGuide, this);
+    this.input.keyboard?.on("keydown-M", this.toggleMusic, this);
 
     bus.on(Events.SIGN_LIVE, this.onSignLive, this);
     bus.on(Events.SIXSEVEN_REPS, this.onReps, this);
@@ -118,6 +121,9 @@ export class BattleScene extends Phaser.Scene {
   }
   private toggleGuide(): void {
     Overlay.toggleSealGuide();
+  }
+  private toggleMusic(): void {
+    sfx.setMuted(music.toggleMute());
   }
 
   private debugText(): string {
@@ -329,6 +335,7 @@ export class BattleScene extends Phaser.Scene {
     bus.off(Events.NET_CLOSE, this.onNetClose, this);
     this.input.keyboard?.off("keydown-D", this.toggleDebug, this);
     this.input.keyboard?.off("keydown-G", this.toggleGuide, this);
+    this.input.keyboard?.off("keydown-M", this.toggleMusic, this);
 
     this.sixSeven.stop();
     this.bridge.stop();

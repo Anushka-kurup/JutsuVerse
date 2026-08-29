@@ -1,7 +1,15 @@
 import { bus, Events } from "../core/EventBus";
 import { session } from "../core/Session";
 import type { SpecialView } from "../network/NetworkClient";
-import { HAND_SIGNS, SEAL_IDS, signById, SKILLS, skillById, type Side } from "../types";
+import {
+  HAND_SIGNS,
+  SEAL_IDS,
+  signById,
+  SKILLS,
+  skillById,
+  skillForPrefix,
+  type Side,
+} from "../types";
 import { sealHtml, sealTextHtml } from "./sealVisual";
 
 /**
@@ -327,16 +335,39 @@ class OverlayController {
   }
 
   private skillPanelHtml(): string {
-    return SKILLS.map((s) => {
-      const tag = s.action === "ATTACK" ? (s.element ?? "ATK") : s.action;
-      return `<div class="skill-line" data-skill="${s.id}">
+    // one card per element (+ shield). The levels of an element differ only by
+    // their trailing seal, so they collapse into a single row: the shared base
+    // seals are solid, each level-up seal is drawn dashed.
+    const groups = new Map<string, typeof SKILLS>();
+    for (const s of SKILLS) {
+      const key = s.element ?? s.action;
+      let list = groups.get(key);
+      if (!list) groups.set(key, (list = []));
+      list.push(s);
+    }
+
+    const card = (key: string, list: typeof SKILLS): string => {
+      const deepest = list.reduce((a, b) => (b.seals.length > a.seals.length ? b : a));
+      const base = Math.min(...list.map((s) => s.seals.length)); // shared prefix length
+      const seals = deepest.seals
+        .map((id, i) =>
+          sealHtml(id, i < base ? "skill-seal" : "skill-seal skill-seal--ext"),
+        )
+        .join("");
+      const isAtk = deepest.action === "ATTACK";
+      const tag = isAtk ? (deepest.element ?? "ATK") : deepest.action;
+      const name = isAtk ? `${key[0]}${key.slice(1).toLowerCase()} Attack` : deepest.name;
+      const ids = list.map((s) => s.id).join(",");
+      return `<div class="skill-line" data-skill="${deepest.id}" data-skills="${ids}" data-group="${key}">
         <div class="skill-head">
-          <span class="skill-name"><b>${s.nameJa}</b><small>${s.name}</small></span>
-          <span class="skill-tag skill-tag--${s.action.toLowerCase()}">${tag}</span>
+          <span class="skill-name"><b>${name}</b></span>
+          <span class="skill-tag skill-tag--${deepest.action.toLowerCase()}">${tag}</span>
         </div>
-        <div class="skill-seals">${s.seals.map((id) => sealHtml(id, "skill-seal")).join("")}</div>
+        <div class="skill-seals">${seals}</div>
       </div>`;
-    }).join("");
+    };
+
+    return [...groups.entries()].map(([key, list]) => card(key, list)).join("");
   }
 
   get stageEl(): HTMLElement {
@@ -373,8 +404,23 @@ class OverlayController {
   }
 
   setSeals(side: Side, ids: string[]): void {
-    // both HUD strips are kanji-only; photos live in the Seal Guide (press G)
-    this.rows[side].seals.innerHTML = ids.map((id) => sealTextHtml(id)).join("");
+    // the buffer is always a live prefix now, so show which jutsu it's building:
+    // its full sequence with the done seals lit and the remaining ones ghosted.
+    const strip = this.rows[side].seals;
+    const target = skillForPrefix(ids);
+
+    if (!target) {
+      strip.innerHTML = ids.map((id) => sealTextHtml(id)).join("");
+      return;
+    }
+
+    strip.innerHTML =
+      `<span class="seal-strip-name">${target.nameJa} ${ids.length}/${target.seals.length}</span>` +
+      target.seals
+        .map((id, i) =>
+          sealTextHtml(id, i < ids.length ? "seal-cell--done" : "seal-cell--todo"),
+        )
+        .join("");
   }
 
   setLiveSign(side: Side, id: string | null): void {
@@ -400,10 +446,15 @@ class OverlayController {
       this.skillCast.classList.remove("on");
       this.skillCast.hidden = true;
       this.skillCast.innerHTML = "";
-    }, 2000);
+    }, 3500);
 
     if (side === "me") {
-      const row = this.skillPanel.querySelector(`.skill-line[data-skill="${skillId}"]`);
+      // cards are merged per element, so L1/L2 casts resolve to the group card
+      const row =
+        this.skillPanel.querySelector(`.skill-line[data-skill="${skillId}"]`) ??
+        this.skillPanel.querySelector(
+          `.skill-line[data-group="${skill.element ?? skill.action}"]`,
+        );
       row?.classList.add("fired");
       window.setTimeout(() => row?.classList.remove("fired"), 900);
     }

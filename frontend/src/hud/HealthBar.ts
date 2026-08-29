@@ -36,6 +36,10 @@ export class HealthBar {
     this.label.setText(`${this.label.text.split("  ")[0]}  ${Math.round(next)}`);
   }
 
+  setName(name: string): void {
+    this.label.setText(`${name}  ${Math.round(this.value)}`);
+  }
+
   get hp(): number {
     return this.value;
   }

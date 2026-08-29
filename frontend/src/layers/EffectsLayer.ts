@@ -1,15 +1,54 @@
 import Phaser from "phaser";
+import { ChargeEffect, type ChargeOpts } from "../entities/ChargeEffect";
 import { SkillEffect, type ProjectileOpts } from "../entities/SkillEffect";
+import type { Side } from "../types";
 
 /**
  * Spec §4.2 layer 3 owner. Spawns SkillEffect instances and forgets about them
  * (each one self-destroys); keeps a list only so the scene can wipe the layer
- * on shutdown / rematch.
+ * on shutdown / rematch. Also owns the per-side "charging jutsu" visual.
  */
 export class EffectsLayer {
   private readonly live: SkillEffect[] = [];
+  private readonly charges: Partial<Record<Side, ChargeEffect>> = {};
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  /** Grow the charge for `side` as its seal sequence progresses. */
+  charge(side: Side, opts: ChargeOpts, step: number, total: number): void {
+    let c = this.charges[side];
+    if (c && c.element !== opts.element) {
+      c.dismiss(); // switched to a different element — start over
+      c = undefined;
+    }
+    if (!c) {
+      c = new ChargeEffect(this.scene, opts);
+      this.charges[side] = c;
+    } else {
+      c.retarget(opts.skillId, opts.withGlow); // same element, maybe L1 → L2
+    }
+    c.setProgress(step, total);
+  }
+
+  /**
+   * The jutsu fired — flare the charge out (the projectile takes over). Returns
+   * the size + how many copies charged, so the volley throws that many at that
+   * size. `count` is 0 when nothing was charging.
+   */
+  releaseCharge(side: Side): { artSize?: number; count: number } {
+    const c = this.charges[side];
+    const size = c?.artSize ?? 0;
+    const count = c?.count ?? 0;
+    c?.release();
+    delete this.charges[side];
+    return { artSize: size > 0 ? size : undefined, count };
+  }
+
+  /** Sequence abandoned / no longer an attack — fade the charge. */
+  clearCharge(side: Side): void {
+    this.charges[side]?.dismiss();
+    delete this.charges[side];
+  }
 
   projectile(opts: ProjectileOpts): void {
     this.reap();
@@ -17,7 +56,7 @@ export class EffectsLayer {
   }
 
   /**
-   * Throw `count` projectiles as one volley — level 1/2/3 attacks fire 1/2/3
+   * Throw `count` projectiles as one volley — level 1/2 attacks fire 1/2
    * shots. They're staggered in time and fanned vertically so they read as a
    * barrage rather than a single blob; `onArrive` runs once, on the last shot.
    */
@@ -54,6 +93,10 @@ export class EffectsLayer {
   clear(): void {
     this.live.forEach((e) => e.destroy());
     this.live.length = 0;
+    for (const side of Object.keys(this.charges) as Side[]) {
+      this.charges[side]?.destroy();
+      delete this.charges[side];
+    }
   }
 
   private reap(): void {
