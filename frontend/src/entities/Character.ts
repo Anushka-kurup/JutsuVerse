@@ -5,7 +5,6 @@ export type CharState = "IDLE" | "CAST" | "HIT" | "KO";
 const ELEMENT_COLOR: Record<string, number> = {
   FIRE: 0xff7043,
   WATER: 0x35a7ff,
-  WIND: 0x74e39b,
   EARTH: 0xc38b52,
 };
 const DEFENSE_COLOR = { REFLECT: 0xb16bff, PROTECT: 0x35d0ba } as const;
@@ -33,6 +32,8 @@ export class Character {
   private idleTween?: Phaser.Tweens.Tween;
   private state: CharState = "IDLE";
   private readonly bobTargets: Phaser.GameObjects.GameObject[];
+  private readonly bodyRestY = 0;
+  private readonly faceRestY: number | null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -55,6 +56,7 @@ export class Character {
 
     const children: Phaser.GameObjects.GameObject[] = [this.shadow, this.aura, this.body];
     this.bobTargets = [this.body];
+    this.faceRestY = faceVideo ? -dh * (1 - HEAD_FROM_TOP) : null;
 
     if (faceVideo) {
       const dia = dh * FACE_FRAC;
@@ -64,7 +66,7 @@ export class Character {
       const key = `face-${faceKeySeq++}`;
       this.faceTex = scene.textures.createCanvas(key, 160, 160) ?? undefined;
       this.face = scene.add
-        .image(0, -dh * (1 - HEAD_FROM_TOP), key)
+        .image(0, this.faceRestY!, key)
         .setDisplaySize(dia, dia);
       children.push(this.face);
       this.bobTargets.push(this.face);
@@ -101,9 +103,15 @@ export class Character {
   }
 
   // ── animations ────────────────────────────────────────────────────
+  private restPose(): void {
+    this.idleTween?.stop();
+    this.body.setY(this.bodyRestY);
+    if (this.face && this.faceRestY !== null) this.face.setY(this.faceRestY);
+  }
+
   private playIdle(): void {
     this.state = "IDLE";
-    this.idleTween?.stop();
+    this.restPose();
     this.body.setAngle(0).setAlpha(1);
     this.face?.setAngle(0).setAlpha(1);
     this.idleTween = this.scene.tweens.add({
@@ -119,6 +127,7 @@ export class Character {
   cast(element: string): void {
     if (this.state === "KO") return;
     this.state = "CAST";
+    this.restPose();
     this.flash(ELEMENT_COLOR[element] ?? 0xffffff);
     this.scene.tweens.add({
       targets: this.root,
@@ -135,6 +144,7 @@ export class Character {
   hit(amount: number): void {
     if (this.state === "KO") return;
     this.state = "HIT";
+    this.restPose();
     this.body.setTint(0xff5470);
     this.scene.tweens.add({
       targets: this.root,

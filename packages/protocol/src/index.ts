@@ -50,7 +50,7 @@ export const MAX_HP = 20;
 export const MAX_SHIELDS = 3;
 export const COUNTDOWN_TICKS = TICK_HZ * 4;
 export const CLASH_WINDOW_TICKS = TICK_HZ;
-export const SHIELD_MAX_TICKS = TICK_HZ * 10;
+export const SHIELD_MAX_TICKS = TICK_HZ * 3;
 
 export const JoinMsg = z.object({
   type: z.literal("join"),

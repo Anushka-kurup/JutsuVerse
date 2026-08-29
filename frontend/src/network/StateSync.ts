@@ -105,7 +105,7 @@ export class StateSync {
           skillId: skill.id,
           level,
         },
-        level, // level 1/2/3 → 1/2/3 projectiles
+        level, // level 1/2 → 1/2 projectiles
       );
     } else {
       char.pulseDefense("PROTECT");

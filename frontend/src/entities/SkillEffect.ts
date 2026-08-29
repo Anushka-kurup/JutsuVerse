@@ -3,7 +3,6 @@ import Phaser from "phaser";
 const ELEMENT_COLOR: Record<string, number> = {
   FIRE: 0xff7043,
   WATER: 0x35a7ff,
-  WIND: 0x74e39b,
   EARTH: 0xc38b52,
 };
 

@@ -51,10 +51,9 @@ export interface MatchSession {
 
 const OTHER: Record<Seat, Seat> = { a: "b", b: "a" };
 const BEATS: Record<SkillElement, SkillElement> = {
-  FIRE: "WIND",
-  WIND: "EARTH",
-  EARTH: "WATER",
   WATER: "FIRE",
+  FIRE: "EARTH",
+  EARTH: "WATER",
 };
 
 export function createMatch(): MatchSession {

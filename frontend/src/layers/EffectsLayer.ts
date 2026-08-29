@@ -17,7 +17,7 @@ export class EffectsLayer {
   }
 
   /**
-   * Throw `count` projectiles as one volley — level 1/2/3 attacks fire 1/2/3
+   * Throw `count` projectiles as one volley — level 1/2 attacks fire 1/2
    * shots. They're staggered in time and fanned vertically so they read as a
    * barrage rather than a single blob; `onArrive` runs once, on the last shot.
    */
