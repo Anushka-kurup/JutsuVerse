@@ -1,46 +1,14 @@
-export interface PlayerPublic {
-  player_id: string;
-  hp: number;
-  energy: number;
-  alive: boolean;
-  current_sign: string;
-  active_effect: "REFLECT" | "PROTECT" | null;
-  reflect_uses_left: number;
-  protect_uses_left: number;
+// Wire protocol now lives in @jutsu/protocol (the server's package); seal/skill
+// catalogues stay in ../../shared.
+export * from "@jutsu/protocol";
+export * from "../../shared/handSigns";
+export * from "../../shared/skills";
+
+/** Which fighter a derived battle beat belongs to, from the local player's POV. */
+export type Side = "me" | "opp";
+
+export interface ConnectOpts {
+  server: string;
+  room: string;
+  player: string;
 }
-
-export interface MatchPublic {
-  p1: PlayerPublic;
-  p2: PlayerPublic;
-  winner: string | null;
-  log: string[];
-}
-
-export type ServerMessage =
-  | { type: "state"; match: MatchPublic }
-  | { type: "error"; message: string }
-  | { type: "webrtc-peer"; peer_id: string; initiator: boolean }
-  | { type: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-ice"; candidate: RTCIceCandidateInit };
-
-export type ClientMessage =
-  | { type: "sign"; sign: string }
-  | { type: "reset" }
-  | { type: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-ice"; candidate: RTCIceCandidateInit };
-
-export interface SignDef {
-  sign: string;
-  label: string;
-  kind: "ATTACK" | "REFLECT" | "PROTECT";
-}
-
-export const SIGNS: SignDef[] = [
-  { sign: "TIGER", label: "Tiger → Fire", kind: "ATTACK" },
-  { sign: "SNAKE", label: "Snake → Water", kind: "ATTACK" },
-  { sign: "BIRD", label: "Bird → Wind", kind: "ATTACK" },
-  { sign: "RAM", label: "Ram → Reflect", kind: "REFLECT" },
-  { sign: "BOAR", label: "Boar → Protect", kind: "PROTECT" },
-];

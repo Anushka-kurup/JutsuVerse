@@ -1,0 +1,21 @@
+{
+  "name": "jutsuverse",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Hand-sign ninja duel — Phaser 3 client + ws realtime server",
+  "workspaces": [
+    "packages/*",
+    "server",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm -w server run dev\" \"npm -w frontend run dev\"",
+    "dev:server": "npm -w server run dev",
+    "dev:web": "npm -w frontend run dev",
+    "typecheck": "npm -w @jutsu/protocol run typecheck && npm -w server run typecheck && npm -w frontend run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
