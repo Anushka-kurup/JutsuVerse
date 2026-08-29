@@ -302,6 +302,7 @@ body {
   z-index: 4;
 }
 
+/* both feeds share the base `top` so they stay horizontally aligned */
 .cam-window--local {
   left: 10px;
 }
@@ -602,11 +603,13 @@ body {
   transform: scale(1);
 }
 
-/* ── big "currently detected" seal box (bottom-right) — my existing seal PNG, enlarged ── */
+/* ── "currently detected" seal box — top-left, above my camera window ── */
 #seal-now {
-  position: absolute;
-  right: 14px;
-  bottom: calc(var(--dock-h) + 14px);
+  position: fixed;
+  left: 10px;
+  top: 12px;
+  width: clamp(150px, 15vw, 230px); /* same column width as the camera window */
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -636,8 +639,9 @@ body {
 }
 
 .seal-cell--now {
-  width: clamp(150px, 22vh, 260px);
-  height: clamp(150px, 22vh, 260px);
+  width: min(100%, clamp(110px, 15vh, 170px));
+  aspect-ratio: 1;
+  height: auto;
   border-radius: 14px;
   font-size: 6rem;
 }
