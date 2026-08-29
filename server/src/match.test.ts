@@ -148,6 +148,30 @@ test("shield sequence is 13 then 12 and requires sign 12 to remain held", () => 
   assert.equal(expired.stance, "idle");
 });
 
+test("seal buffer ignores consecutive duplicates and stores at most five", () => {
+  let fighter = createMatch().fighters.a;
+  fighter = applyEdge(fighter, "rat", "down", 1);
+  fighter = applyEdge(fighter, "rat", "down", 2);
+  assert.deepEqual(fighter.buffer.map((event) => event.sign), ["rat"]);
+
+  for (const [index, sign] of [
+    "ox",
+    "tiger",
+    "hare",
+    "dragon",
+    "snake",
+  ].entries()) {
+    fighter = applyEdge(fighter, sign as Parameters<typeof applyEdge>[1], "down", index + 3);
+  }
+  assert.deepEqual(fighter.buffer.map((event) => event.sign), [
+    "ox",
+    "tiger",
+    "hare",
+    "dragon",
+    "snake",
+  ]);
+});
+
 test("server owns 3, 2, 1, 0 countdown", () => {
   let m = createMatch();
   m = markReady(m, "a", "camera");

@@ -20,6 +20,7 @@ import {
 } from "./commands.ts";
 
 const BUFFER_TICKS = TICK_HZ * 40;
+const MAX_BUFFERED_SIGNS = 5;
 const LEVEL_FINALIZE_TICKS = TICK_HZ * 4;
 const HITSTUN_TICKS = 6;
 
@@ -66,9 +67,10 @@ export function createFighter(): Fighter {
 /** A confirmed seal is represented by the down edge; up only closes the input edge. */
 export function applyEdge(f: Fighter, sign: Sign, edge: Edge, tick: number): Fighter {
   if (edge === "up") return f;
+  if (f.buffer[f.buffer.length - 1]?.sign === sign) return f;
   return {
     ...f,
-    buffer: [...f.buffer, { sign, tick }].slice(-16),
+    buffer: [...f.buffer, { sign, tick }].slice(-MAX_BUFFERED_SIGNS),
   };
 }
 

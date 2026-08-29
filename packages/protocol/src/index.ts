@@ -111,8 +111,8 @@ export const FighterPublicSchema = z.object({
   /** id of the last jutsu that activated — for the cast banner */
   lastSkill: z.string().nullable(),
   lastSkillTick: z.number(),
-  /** committed seal sequence still inside the match window */
-  buffer: z.array(SignSchema),
+  /** up to five committed seals, with consecutive duplicates removed */
+  buffer: z.array(SignSchema).max(5),
   held: z.array(SignSchema),
   guardLeft: z.number().int(),
   shieldActive: z.boolean(),
