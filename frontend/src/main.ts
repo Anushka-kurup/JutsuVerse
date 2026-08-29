@@ -1,6 +1,6 @@
 import "./style.css";
 import { SIGNS, type ClientMessage, type MatchPublic, type PlayerPublic, type ServerMessage } from "./types";
-import { initHandLandmarker, startCamera, stopCamera, detectFrame, drawLandmarks } from "./handTracker";
+import { initHandSignDetector, startCamera, stopCamera, detectFrame, drawDetections } from "./handTracker";
 
 const SEND_INTERVAL_MS = 150;
 const VALID_SIGNS = new Set(SIGNS.map((s) => s.sign)); // TIGER/SNAKE/BIRD/RAM/BOAR
@@ -137,7 +137,7 @@ function renderGameScreen() {
     <div class="camera-row">
       <div class="camera-box">
         <video id="cam-video" autoplay playsinline muted></video>
-        <canvas id="cam-canvas" width="480" height="360"></canvas>
+        <canvas id="cam-canvas" width="960" height="540"></canvas>
         <div class="cam-sign" id="cam-sign">—</div>
         <div class="cam-label">You</div>
       </div>
@@ -265,9 +265,11 @@ function resetWebRTC() {
 function shutdownCamera() {
   if (!cameraOn) return;
   const video = document.querySelector<HTMLVideoElement>("#cam-video");
+  const canvas = document.querySelector<HTMLCanvasElement>("#cam-canvas");
   if (cameraLoopId !== null) cancelAnimationFrame(cameraLoopId);
   cameraLoopId = null;
   if (video) stopCamera(video);
+  canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
   localStream = null;
   activeCamSign = "UNKNOWN";
   cameraOn = false;
@@ -282,6 +284,7 @@ async function toggleCamera(toggleBtn: HTMLButtonElement) {
     if (cameraLoopId !== null) cancelAnimationFrame(cameraLoopId);
     cameraLoopId = null;
     stopCamera(video);
+    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     stopHolding();
     resetWebRTC();
     localStream = null;
@@ -295,7 +298,7 @@ async function toggleCamera(toggleBtn: HTMLButtonElement) {
   try {
     toggleBtn.textContent = "Starting…";
     toggleBtn.disabled = true;
-    await initHandLandmarker();
+    await initHandSignDetector();
     localStream = await startCamera(video);
     cameraOn = true;
     toggleBtn.textContent = "Disable camera";
@@ -305,7 +308,7 @@ async function toggleCamera(toggleBtn: HTMLButtonElement) {
   } catch (err) {
     console.error(err);
     toggleBtn.textContent = "Camera failed — retry";
-    alert("Couldn't access the camera. Check browser permissions and try again.");
+    alert("Couldn't start hand-sign detection. Check camera permissions and the model asset, then try again.");
   } finally {
     toggleBtn.disabled = false;
   }
@@ -314,25 +317,41 @@ async function toggleCamera(toggleBtn: HTMLButtonElement) {
 function runCameraLoop(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
   const signLabel = document.querySelector<HTMLDivElement>("#cam-sign");
 
-  const step = () => {
+  const step = async () => {
     if (!cameraOn) return;
-    const { sign, landmarks } = detectFrame(video, performance.now());
-    drawLandmarks(canvas, landmarks);
-    if (signLabel) signLabel.textContent = sign === "UNKNOWN" ? "—" : sign;
+    try {
+      const { sign, detections, elapsedMs } = await detectFrame(video);
+      if (!cameraOn) return;
 
-    if (sign !== activeCamSign) {
-      activeCamSign = sign;
-      if (VALID_SIGNS.has(sign)) {
-        startHolding(sign);
-      } else {
+      drawDetections(canvas, video, detections, elapsedMs);
+      if (signLabel) {
+        const topDetection = detections[0];
+        signLabel.textContent = topDetection
+          ? `${topDetection.label} ${(topDetection.score * 100).toFixed(1)}%`
+          : "—";
+      }
+
+      if (sign !== activeCamSign) {
+        activeCamSign = sign;
+        if (VALID_SIGNS.has(sign)) {
+          startHolding(sign);
+        } else {
+          stopHolding();
+        }
+      }
+    } catch (error) {
+      console.error("Hand-sign inference failed", error);
+      if (signLabel) signLabel.textContent = "Inference error";
+      if (activeCamSign !== "UNKNOWN") {
+        activeCamSign = "UNKNOWN";
         stopHolding();
       }
     }
 
-    cameraLoopId = requestAnimationFrame(step);
+    cameraLoopId = requestAnimationFrame(() => void step());
   };
 
-  cameraLoopId = requestAnimationFrame(step);
+  cameraLoopId = requestAnimationFrame(() => void step());
 }
 
 function panelHtml(label: string, p: PlayerPublic) {

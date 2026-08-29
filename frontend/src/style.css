@@ -216,7 +216,7 @@ button {
   overflow: hidden;
   border: 1px solid #2c3346;
   background: #0e121a;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
 }
 
 .cam-label {
@@ -239,11 +239,15 @@ button {
   inset: 0;
   width: 100%;
   height: 100%;
-  transform: scaleX(-1); /* mirror, like a selfie cam */
 }
 
 .camera-box video {
   object-fit: cover;
+  transform: scaleX(-1); /* mirror, like a selfie cam */
+}
+
+.camera-box canvas {
+  pointer-events: none;
 }
 
 .cam-sign {
