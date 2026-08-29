@@ -13,15 +13,13 @@ export interface Command {
   recoverTicks: number;
   damage: number;
   guardTicks: number;
-  /** chakra spent when the move starts */
-  energyCost: number;
 }
 
 /**
  * The five jutsu. Sequences are the frontend's seal combos (shared/skills.ts);
- * cost / damage scale with seal count (× 10 energy, × 5 hp). `windowMs` is wide
- * because a camera-detected seal takes ~3 s to confirm — a 5-seal jutsu needs
- * the whole run to fit inside ~30 s.
+ * damage scales with seal count (× 5 hp). `windowMs` is wide because a
+ * camera-detected seal takes ~3 s to confirm — a 5-seal jutsu needs the whole
+ * run to fit inside ~30 s.
  */
 const attack = (id: string, seq: Sign[]): Command => ({
   id,
@@ -34,7 +32,6 @@ const attack = (id: string, seq: Sign[]): Command => ({
   recoverTicks: 5,
   damage: seq.length * 5,
   guardTicks: 0,
-  energyCost: seq.length * 10,
 });
 
 const guard = (id: string, seq: Sign[], guardTicks: number): Command => ({
@@ -48,7 +45,6 @@ const guard = (id: string, seq: Sign[], guardTicks: number): Command => ({
   recoverTicks: 0,
   damage: 0,
   guardTicks,
-  energyCost: seq.length * 10,
 });
 
 export const COMMANDS: Command[] = [

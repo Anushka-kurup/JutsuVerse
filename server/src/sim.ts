@@ -1,7 +1,6 @@
 import {
-  ENERGY_REGEN_PER_TICK,
-  MAX_ENERGY,
   MAX_HP,
+  MAX_SHIELDS,
   type Edge,
   type FighterPublic,
   type Sign,
@@ -24,7 +23,7 @@ export const GUARD_TICKS = 40;
 
 export interface Fighter {
   hp: number;
-  energy: number;
+  shields: number;
   stance: Stance;
   moveId: string | null;
   lastSkill: string | null;
@@ -39,7 +38,7 @@ export interface Fighter {
 export function createFighter(): Fighter {
   return {
     hp: MAX_HP,
-    energy: MAX_ENERGY,
+    shields: MAX_SHIELDS,
     stance: "idle",
     moveId: null,
     lastSkill: null,
@@ -78,7 +77,6 @@ function timings(moveId: string | null): Command | undefined {
 export function stepFighter(f: Fighter, tick: number): Fighter {
   let next: Fighter = {
     ...f,
-    energy: Math.min(MAX_ENERGY, f.energy + ENERGY_REGEN_PER_TICK),
     held: [...f.held],
     buffer: f.buffer.filter((e) => tick - e.tick <= BUFFER_TICKS),
   };
@@ -129,16 +127,13 @@ export function stepFighter(f: Fighter, tick: number): Fighter {
 
   if (next.stance === "idle" || next.stance === "startup") {
     const cmd = matchBuffer(next.buffer, tick);
-    if (cmd && next.energy < cmd.energyCost) {
-      // sequence is right but not enough chakra — hold it, fire once energy is back
-    } else if (cmd?.move === "guard") {
+    if (cmd?.move === "guard") {
       next = {
         ...next,
         stance: "block",
         moveId: cmd.id,
         lastSkill: cmd.id,
         lastSkillTick: tick,
-        energy: next.energy - cmd.energyCost,
         stanceUntilTick: tick + cmd.guardTicks,
         activeFromTick: -1,
         attackDamage: 0,
@@ -151,7 +146,6 @@ export function stepFighter(f: Fighter, tick: number): Fighter {
         moveId: cmd.id,
         lastSkill: cmd.id,
         lastSkillTick: tick,
-        energy: next.energy - cmd.energyCost,
         stanceUntilTick: tick + cmd.startupTicks,
         attackDamage: cmd.damage,
         buffer: consumeSuffix(next.buffer, cmd.seq.length),
@@ -194,6 +188,8 @@ export function resolveHits(
   if (aStrike && b.stance !== "hitstun") {
     if (b.stance === "block") {
       nextB = { ...b, hp: Math.max(0, b.hp - guardedDamage(aDmg)) };
+    } else if (b.shields > 0) {
+      nextB = takeHit({ ...b, shields: b.shields - 1 }, tick, 0);
     } else {
       nextB = takeHit(b, tick, aDmg);
     }
@@ -201,6 +197,8 @@ export function resolveHits(
   if (bStrike && nextA.stance !== "hitstun") {
     if (nextA.stance === "block") {
       nextA = { ...nextA, hp: Math.max(0, nextA.hp - guardedDamage(bDmg)) };
+    } else if (nextA.shields > 0) {
+      nextA = takeHit({ ...nextA, shields: nextA.shields - 1 }, tick, 0);
     } else {
       nextA = takeHit(nextA, tick, bDmg);
     }
@@ -211,7 +209,7 @@ export function resolveHits(
 export function toPublic(f: Fighter, tick: number): FighterPublic {
   return {
     hp: Math.round(f.hp),
-    energy: Math.round(f.energy),
+    shields: f.shields,
     stance: f.stance,
     moveId: f.moveId,
     lastSkill: f.lastSkill,

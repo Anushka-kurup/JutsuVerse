@@ -46,9 +46,8 @@ export const StanceSchema = z.enum(STANCES);
 export const TICK_HZ = 20;
 export const TICK_MS = 1000 / TICK_HZ;
 export const INPUT_DELAY_TICKS = 2;
-export const MAX_HP = 100;
-export const MAX_ENERGY = 100;
-export const ENERGY_REGEN_PER_TICK = 0.5; // ~10 / sec at 20 Hz
+export const MAX_HP = 20;
+export const MAX_SHIELDS = 3;
 
 export const JoinMsg = z.object({
   type: z.literal("join"),
@@ -93,7 +92,7 @@ export type ReadyMsg = z.infer<typeof ReadyMsg>;
 
 export const FighterPublicSchema = z.object({
   hp: z.number(),
-  energy: z.number(),
+  shields: z.number().int(),
   stance: StanceSchema,
   /** id of the command (jutsu) currently being performed, or null */
   moveId: z.string().nullable(),

@@ -1,13 +1,13 @@
 import Phaser from "phaser";
 import { STAGE_WIDTH } from "../core/GameConfig";
 import type { FighterPublic, Side } from "../types";
-import { ChakraGauge } from "./ChakraGauge";
 import { ComboIndicator } from "./ComboIndicator";
 import { HealthBar } from "./HealthBar";
+import { ShieldRow } from "./ShieldRow";
 
 interface SideWidgets {
   hp: HealthBar;
-  chakra: ChakraGauge;
+  shields: ShieldRow;
   meta: Phaser.GameObjects.Text;
 }
 
@@ -30,20 +30,20 @@ export class Hud {
 
   private buildSide(scene: Phaser.Scene, x: number, align: -1 | 1, name: string): SideWidgets {
     const hp = new HealthBar(scene, x, 40, align, name);
-    const chakra = new ChakraGauge(scene, x, 58, align);
+    const shields = new ShieldRow(scene, x, 58, align);
     const meta = scene.add
       .text(x, 70, "", { fontFamily: "monospace", fontSize: "12px", color: "#8a93ad" })
       .setOrigin(align === -1 ? 0 : 1, 0)
       .setScrollFactor(0);
-    return { hp, chakra, meta };
+    return { hp, shields, meta };
   }
 
   updateSide(side: Side, f: FighterPublic): void {
     const w = this.sides[side];
     w.hp.set(f.hp);
-    w.chakra.set(f.energy);
+    w.shields.set(f.shields);
     const s = f.stance === "idle" ? "" : f.stance.toUpperCase();
-    w.meta.setText(`HP ${Math.round(f.hp)}  CK ${Math.round(f.energy)}  ${s}`);
+    w.meta.setText(`HP ${Math.round(f.hp)}  SH ${f.shields}  ${s}`);
   }
 
   showCombo(count: number): void {

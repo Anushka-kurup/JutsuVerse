@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { MAX_HP } from "@jutsu/protocol";
 
 const W = 340;
 const H = 18;
@@ -11,7 +12,7 @@ export class HealthBar {
   readonly container: Phaser.GameObjects.Container;
   private readonly fill: Phaser.GameObjects.Rectangle;
   private readonly label: Phaser.GameObjects.Text;
-  private value = 100;
+  private value = MAX_HP;
 
   constructor(scene: Phaser.Scene, x: number, y: number, align: -1 | 1, name: string) {
     const originX = align === -1 ? 0 : 1;
@@ -19,14 +20,14 @@ export class HealthBar {
     const frame = scene.add.rectangle(0, 0, W, H, 0x0a0d16).setOrigin(originX, 0.5).setStrokeStyle(2, 0x2c3346);
     this.fill = scene.add.rectangle(0, 0, W, H, 0xff5470).setOrigin(originX, 0.5);
     this.label = scene.add
-      .text(align === -1 ? 0 : 0, -H, `${name}  100`, { fontFamily: "monospace", fontSize: "13px", color: "#c8d0e4" })
+      .text(align === -1 ? 0 : 0, -H, `${name}  ${MAX_HP}`, { fontFamily: "monospace", fontSize: "13px", color: "#c8d0e4" })
       .setOrigin(originX, 1);
 
     this.container = scene.add.container(x, y, [frame, this.fill, this.label]);
     this.container.setScrollFactor(0);
   }
 
-  set(hp: number, max = 100): void {
+  set(hp: number, max = MAX_HP): void {
     const next = Phaser.Math.Clamp(hp, 0, max);
     this.value = next;
     const w = (next / max) * W;
