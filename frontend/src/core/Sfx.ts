@@ -11,7 +11,7 @@ const SFX_VOLUME = 0.7;
  * Adding water, wind or earth is dropping `<element>.mp3` into
  * public/audio/sfx/ and adding its name here — nothing else changes.
  */
-const CLIPS = ["fire"] as const;
+const CLIPS = ["fire", "water"] as const;
 
 /**
  * Short attack sounds, played as fire-and-forget one-shots.
