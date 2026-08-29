@@ -21,7 +21,7 @@ import {
 
 const BUFFER_TICKS = TICK_HZ * 40;
 const MAX_BUFFERED_SIGNS = 5;
-const LEVEL_FINALIZE_TICKS = TICK_HZ * 4;
+const LEVEL_FINALIZE_TICKS = TICK_HZ;
 const HITSTUN_TICKS = 6;
 
 interface AttackCandidate {
