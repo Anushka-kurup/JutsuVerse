@@ -1,103 +1,104 @@
 # JutsuVerse 忍
 
-JutsuVerse is a real-time, two-player hand-sign duel. Players cast actions with the on-screen controls or a webcam, while an authoritative FastAPI server manages rooms, combat, and state updates over WebSockets.
+A real-time, hand-sign-controlled duel game. Two players form ninja hand seals — either with physical hand gestures (via webcam) or on-screen buttons — and a FastAPI server referees the match over WebSockets: hold-to-cast timing, elemental clashes, energy, and defensive counters are all resolved server-side so neither client can cheat.
 
-## Features
+## How it works
 
-- Two-player rooms with server-authoritative combat
-- Browser-based hand-sign recognition using a local YOLOX ONNX model
-- ONNX Runtime Web/WASM inference with no model CDN dependency
-- Peer-to-peer WebRTC camera video with signaling relayed by the server
-- On-screen controls when a webcam is unavailable
+- **TIGER** → Fire attack
+- **SNAKE** → Water attack
+- **BIRD** → Wind attack
+- **RAM** → Reflect (counters an attack)
+- **BOAR** → Protect (blocks an attack)
 
-The current game signs are:
-
-- `TIGER` — fire attack
-- `SNAKE` — water attack
-- `BIRD` — wind attack
-- `RAM` — reflect
-- `BOAR` — protect
-
-Fire beats Wind, Wind beats Water, and Water beats Fire. Hold a sign for about one second to cast it. Casting uses energy, which regenerates over time.
+Fire beats Wind, Wind beats Water, Water beats Fire. Hold a sign for about a second to cast it; casting costs energy, which regenerates over time. Reflect and Protect have limited uses per match.
 
 ## Project structure
 
-```text
+```
 backend/
-  main.py                 FastAPI app, WebSocket rooms, and game loop
+  main.py            FastAPI app: WebSocket rooms, game tick loop
+  requirements.txt   Backend dependencies
   game/
-    engine.py             Combat engine
-    rules.py              Balance constants and sign mappings
-    state.py              Match and player state
-  player_client.py        Optional native OpenCV/MediaPipe client
+    engine.py         GameEngine — turns signs into actions and resolves combat
+    state.py           Match/PlayerState dataclasses
+    rules.py            Balance constants and sign → action mapping
+  player_client.py   Optional standalone webcam client (OpenCV + MediaPipe, runs in a native window)
 
 frontend/
-  public/models/
-    yolox_nano.onnx       Local hand-sign recognition model
   src/
-    main.ts               UI, WebSocket client, and WebRTC video
-    handTracker.ts        ONNX webcam inference and detection rendering
-    types.ts              Client message and game-state types
-    style.css             Application styling
+    main.ts           App UI, WebSocket client, hold-to-cast logic
+    signDetector.ts   In-browser hand-sign detection (YOLOX-Nano via onnxruntime-web)
+    types.ts          Shared message/state types
+    style.css
+  index.html
+  public/models/
+    yolox_nano.onnx   Custom-trained 16-class hand-sign detector
 ```
 
-## Run locally
+## Running the backend
 
-You need Python 3.10 or newer and a current Node.js installation.
+Requires Python 3.10+ (the code uses `X | None` union type hints — on older
+Python you'll hit `TypeError: unsupported operand type(s) for |: 'type' and
+'NoneType'`; check with `python --version` and create the venv below with a
+3.10+ interpreter).
 
-### 1. Start the backend
-
-From the repository root in PowerShell:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install fastapi "uvicorn[standard]" websockets
-Set-Location backend
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
 ```
 
-The backend is then available at:
+That starts the server on `http://localhost:8000` (equivalent to running
+`uvicorn main:app --host 0.0.0.0 --port 8000 --reload`). Binding to
+`0.0.0.0` means a friend on the same network can also reach it at
+`ws://<your-LAN-IP>:8000` instead of running their own backend.
 
-- Health check: `http://localhost:8000/`
-- Game socket: `ws://localhost:8000/ws/{room_id}/{player_id}`
+The server exposes:
+- `GET /` — health check, lists active rooms
+- `WS /ws/{room_id}/{player_id}` — join a room (max 2 players per room)
 
-### 2. Start the frontend
+## Running the frontend
 
-Open a second PowerShell terminal at the repository root:
+Requires Node.js 18+.
 
-```powershell
-Set-Location frontend
+```bash
+cd frontend
 npm install
 npm run dev
 ```
 
-Open the URL printed by Vite, normally `http://localhost:5173`.
+Open the printed local URL (e.g. `http://localhost:5173`) in two browser tabs/windows (or two devices) to simulate both players. On the connect screen, point both at the same server URL and room name, but give each a distinct player ID.
 
-### 3. Connect two players
+In the game screen you can either click-and-hold the sign buttons, or click "Enable camera" to cast signs by making the hand gesture in front of your webcam. Detection runs a custom-trained YOLOX-Nano ONNX model (`frontend/public/models/yolox_nano.onnx`, already committed to the repo) locally in the browser via `onnxruntime-web`; the WASM runtime itself loads from a CDN on first use, so internet access is required for that part. Camera access needs a "secure context" (`localhost` or HTTPS) — `npm run dev` already satisfies that on every machine, so no extra setup is needed there.
 
-Open the frontend in two browser windows. In both windows, use `ws://localhost:8000` and the same room name, but enter a different player ID for each player. A room accepts up to two players.
+> **Note:** `signDetector.ts` currently has placeholder class names (`class_0`..`class_15`) — the model's real 16 class labels and their training order aren't recorded anywhere in this repo, so detected signs won't show correct names until `CLASS_NAMES` in that file is updated.
 
-Once connected, use the sign buttons or select **Enable camera**. Camera access requires browser permission. The ONNX model loads locally from `frontend/public/models/yolox_nano.onnx`.
+## Optional: native webcam client
 
-## Production frontend build
+`backend/player_client.py` is a standalone alternative to the browser camera flow — it opens its own OpenCV window instead of running in the browser. It needs its own dependencies (not part of the backend server's requirements):
 
-```powershell
-Set-Location frontend
-npm run build
-```
-
-The generated site is written to `frontend/dist/`.
-
-## Optional native webcam client
-
-`backend/player_client.py` provides an alternative OpenCV window instead of browser-based recognition. Install its extra dependencies and run it from `backend/`:
-
-```powershell
-python -m pip install opencv-python mediapipe websockets
+```bash
+pip install opencv-python "mediapipe==0.10.14" websockets
 python player_client.py --server ws://localhost:8000 --room match1 --player p1
 ```
 
-## Model attribution
+> **Note:** pin `mediapipe==0.10.14` exactly — newer mediapipe releases (1.0+) dropped the
+> `mp.solutions.hands` API this script (and the meme classifier tooling under
+> `frontend/public/models/memes/`) depends on. An unpinned `pip install mediapipe` grabs the
+> latest release and fails with `AttributeError: module 'mediapipe' has no attribute 'solutions'`.
 
-The browser detector uses the YOLOX hand-sign model and preprocessing approach from [Kazuhito00/NARUTO-HandSignDetection](https://github.com/Kazuhito00/NARUTO-HandSignDetection).
+## Building for production
+
+```bash
+cd frontend
+npm run build
+```
+
+Outputs static assets to `frontend/dist/`.
+
+## Troubleshooting
+
+- **Camera button fails / permission denied** — check your OS and browser have granted camera access to the site, and that no other app is using the camera.
+- **Can't connect to the other player** — confirm both are using the exact same room name and pointing at the same backend server address.

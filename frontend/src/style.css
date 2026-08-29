@@ -1,908 +1,329 @@
 :root {
   color-scheme: dark;
   font-family: "Segoe UI", system-ui, sans-serif;
-  --bg: #070a11;
-  --panel: #141a26;
-  --line: #2c3346;
-  --ink: #eef1f8;
-  --muted: #8a93ad;
-  --accent: #4f7dff;
-  --dock-h: 32vh; /* bottom third = the jutsu dock */
 }
 
 * {
   box-sizing: border-box;
 }
 
-html,
 body {
   margin: 0;
-  height: 100%;
+  min-height: 100vh;
+  background: #10141c;
+  color: #eef1f8;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
 }
 
-body {
-  background: var(--bg);
-  color: var(--ink);
-  overflow: hidden;
-}
-
-/* ── stage: Phaser canvas + DOM overlay share one box ─────────────── */
 #app {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  max-width: 640px;
 }
 
-#stage {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: calc(100vh - var(--dock-h)); /* battle renders in the top two-thirds */
+h1 {
+  text-align: center;
+  letter-spacing: 0.08em;
+  margin-bottom: 1.5rem;
 }
 
-#stage canvas {
-  display: block;
-  margin: 0 auto;
-}
-
-#overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none; /* children opt back in */
-}
-
-#overlay > * {
-  pointer-events: auto;
-}
-
-/* ── connect menu ────────────────────────────────────────────────── */
-#menu {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(360px, 86vw);
+.mode-toggle {
   display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  padding: 1.6rem;
-  background: rgba(20, 26, 38, 0.92);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  backdrop-filter: blur(4px);
-}
-
-#menu[hidden] {
-  display: none;
-}
-
-#menu h1 {
-  margin: 0;
-  text-align: center;
-  letter-spacing: 0.12em;
-  font-size: 1.5rem;
-}
-
-#menu .tagline {
-  margin: 0 0 0.4rem;
-  text-align: center;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-#menu label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-#menu input {
-  padding: 0.5rem 0.6rem;
-  background: #0e121a;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--ink);
-  font-size: 0.9rem;
-}
-
-#menu button {
-  padding: 0.65rem;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
-#menu button[data-act="join"] {
-  background: transparent;
-  color: var(--ink);
-  border-color: var(--line);
-}
-
-#menu button:hover {
-  filter: brightness(1.12);
-}
-
-.menu-or {
-  text-align: center;
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  margin: 0.1rem 0;
-}
-
-.menu-error {
-  min-height: 1rem;
-  text-align: center;
-  font-size: 0.78rem;
-  color: #ff8a5b;
-}
-
-/* ── lobby (after connecting, before the opponent joins) ─────────── */
-#lobby {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(360px, 86vw);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 0.5rem;
-  padding: 1.8rem 1.6rem;
-  background: rgba(20, 26, 38, 0.95);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  text-align: center;
+  margin-bottom: 1rem;
 }
 
-#lobby[hidden] {
-  display: none;
+.mode-btn {
+  flex: 1;
+  padding: 0.6rem;
+  background: #171c27;
+  color: #9aa4bb;
+  border: 1px solid #262d3d;
 }
 
-#lobby h1 {
-  margin: 0 0 0.6rem;
-  letter-spacing: 0.12em;
-  font-size: 1.4rem;
+.mode-btn:hover {
+  background: #1e2534;
 }
 
-.lobby-label {
-  margin: 0;
-  font-size: 0.66rem;
-  letter-spacing: 0.22em;
-  color: var(--muted);
+.mode-btn.active {
+  background: #4f7dff;
+  color: white;
+  border-color: #4f7dff;
 }
 
-.lobby-code {
-  margin: 0.1rem 0 0.4rem;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 2.6rem;
-  font-weight: 800;
-  letter-spacing: 0.28em;
-  color: var(--ink);
-  text-indent: 0.28em;
+.card {
+  background: #171c27;
+  border: 1px solid #262d3d;
+  border-radius: 12px;
+  padding: 1.25rem;
 }
 
-.lobby-status {
-  margin: 0 0 0.6rem;
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-.lobby-cancel {
-  padding: 0.5rem 1.4rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-
-/* ── camera preview (spec layer 5) ───────────────────────────────── */
-#cam-mount {
-  position: absolute;
-  left: 16px;
-  bottom: calc(var(--dock-h) + 14px);
-}
-
-.cam-preview {
+.field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: 240px;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
 }
 
-.cam-window {
+.field label {
+  font-size: 0.8rem;
+  color: #9aa4bb;
+}
+
+.field input {
+  background: #0e121a;
+  border: 1px solid #2c3346;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  color: #eef1f8;
+  font-size: 0.95rem;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.connect-btn {
+  width: 100%;
+  padding: 0.7rem;
+  background: #4f7dff;
+  color: white;
+  font-size: 1rem;
+}
+
+.connect-btn:hover {
+  background: #3d67e6;
+}
+
+.status {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #9aa4bb;
+  margin-top: 0.6rem;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.panel h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.bar {
+  height: 14px;
+  border-radius: 7px;
+  background: #262d3d;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+  border: 1px solid #2c3346;
+}
+
+.bar-fill {
+  height: 100%;
+  transition: width 0.15s ease;
+}
+
+.bar-fill.hp {
+  background: linear-gradient(90deg, #ff5470, #ff8a5b);
+}
+
+.bar-fill.energy {
+  background: linear-gradient(90deg, #35d0ba, #4f7dff);
+}
+
+.bar-label {
+  font-size: 0.72rem;
+  color: #9aa4bb;
+  margin-bottom: 0.15rem;
+}
+
+.meta-line {
+  font-size: 0.78rem;
+  color: #b7bfd4;
+  margin-top: 0.4rem;
+}
+
+.dead {
+  opacity: 0.45;
+}
+
+.signs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.sign-btn {
+  padding: 0.85rem 0.4rem;
+  background: #1e2534;
+  color: #eef1f8;
+  border: 1px solid #2c3346;
+  font-size: 0.85rem;
+  transition: background 0.1s ease, transform 0.1s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sign-btn:active,
+.sign-btn.holding {
+  background: #4f7dff;
+  transform: scale(0.97);
+}
+
+.sign-btn[data-kind="REFLECT"].holding {
+  background: #b16bff;
+}
+
+.sign-btn[data-kind="PROTECT"].holding {
+  background: #35d0ba;
+}
+
+.log {
+  background: #0e121a;
+  border: 1px solid #2c3346;
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  color: #9aa4bb;
+  min-height: 90px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.log div {
+  margin-bottom: 0.2rem;
+}
+
+.banner {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  padding: 0.8rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.banner.win {
+  background: #14351f;
+  color: #4ade80;
+}
+
+.banner.lose {
+  background: #3a1620;
+  color: #ff5470;
+}
+
+.camera-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.camera-box {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
-  border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
+  border: 1px solid #2c3346;
   background: #0e121a;
+  aspect-ratio: 4 / 3;
 }
 
-.cam-window--remote {
-  width: 120px;
-  opacity: 0.9;
+.cam-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(15, 18, 26, 0.75);
+  border: 1px solid #2c3346;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #9aa4bb;
 }
 
-.cam-feed,
-.cam-detect {
+.camera-box video,
+.camera-box canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  transform: scaleX(-1); /* selfie mirror */
+  transform: scaleX(-1); /* mirror, like a selfie cam */
 }
 
-.cam-feed {
+.camera-box video {
   object-fit: cover;
-}
-
-.cam-score {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  background: rgba(7, 10, 17, 0.75);
-  border: 1px solid var(--line);
-  font-size: 0.66rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.cam-tag {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  background: rgba(7, 10, 17, 0.75);
-  border: 1px solid var(--line);
-  font-size: 0.66rem;
-  font-weight: 600;
-  color: var(--muted);
 }
 
 .cam-sign {
   position: absolute;
-  bottom: 6px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-}
-
-.cam-sign--armed {
-  filter: drop-shadow(0 0 6px var(--accent));
-}
-
-.cam-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  pointer-events: none;
-  background: conic-gradient(var(--accent) var(--p, 0%), transparent 0);
-  -webkit-mask: radial-gradient(circle, transparent 66%, #000 68%);
-  mask: radial-gradient(circle, transparent 66%, #000 68%);
-  opacity: 0.85;
-}
-
-.cam-ring--full {
-  background: conic-gradient(#35d0ba 100%, transparent 0);
-}
-
-.cam-toggle {
-  padding: 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--ink);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.cam-preview--on .cam-toggle {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-/* persistent seal buffer under the You feed (keyboard-style input history) */
-.cam-seq {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(7, 10, 17, 0.88);
-}
-
-.cam-seq-label {
-  flex-shrink: 0;
-  font-size: 0.56rem;
+  background: rgba(15, 18, 26, 0.75);
+  border: 1px solid #2c3346;
+  border-radius: 999px;
+  padding: 0.25rem 0.9rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--muted);
+  letter-spacing: 0.04em;
+  font-size: 0.85rem;
+  color: #4f7dff;
 }
 
-.cam-seq-list {
+.cam-btn {
+  flex: 1;
+  padding: 0.6rem;
+  background: #262d3d;
+  color: #eef1f8;
+}
+
+.cam-btn:hover {
+  background: #313a52;
+}
+
+.cam-btn.active {
+  background: #4f7dff;
+}
+
+.actions-row {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
 }
 
-.cam-seq-list .seal-cell--text {
-  width: 2rem;
-  height: 2rem;
-  font-size: 1.3rem;
-  border-color: rgba(79, 125, 255, 0.5);
-  background: rgba(79, 125, 255, 0.12);
+.reset-btn {
+  flex: 1;
+  padding: 0.6rem;
+  background: #262d3d;
+  color: #eef1f8;
 }
 
-.cam-seq-empty {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--muted);
+.reset-btn:hover {
+  background: #313a52;
 }
 
-/* ── seal / skill visuals: <img> with kanji-text fallback ────────── */
-.seal-cell {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  width: 2.1rem;
-  height: 2.1rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(7, 10, 17, 0.8);
+.meme-round-info {
+  text-align: center;
+  margin-bottom: 0.8rem;
+}
+
+.meme-target {
   font-size: 1.2rem;
   font-weight: 700;
-  color: var(--ink);
-  overflow: hidden;
-}
-
-.seal-cell img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.seal-cell--empty {
-  color: var(--muted);
-}
-
-/* kanji-only cell — both HUD strips + camera preview use this (photos are Guide-only) */
-.seal-cell--text {
-  width: 2.5rem;
-  height: 2.5rem;
-  font-size: 1.6rem;
-}
-
-.seal-cell--live {
-  border-color: var(--accent);
-  box-shadow: 0 0 8px rgba(79, 125, 255, 0.6);
-}
-
-.seal-row[data-side="me"] .seal-cell--text {
-  border-color: rgba(79, 125, 255, 0.5);
-  background: rgba(79, 125, 255, 0.12);
-}
-
-.seal-row[data-side="opp"] .seal-cell--text {
-  border-color: rgba(255, 84, 112, 0.5);
-  background: rgba(255, 84, 112, 0.14);
-}
-
-.seal-row[data-side="opp"] .seal-cell--live {
-  border-color: #ff5470;
-  box-shadow: 0 0 8px rgba(255, 84, 112, 0.6);
-}
-
-.skill-visual {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 10px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.skill-visual img {
-  height: 2rem;
-}
-
-.skill-visual small {
-  display: block;
-  font-size: 0.62rem;
-  font-weight: 500;
-  opacity: 0.85;
-}
-
-/* ── skill cast: big centre banner shown for 3s when a jutsu fires ── */
-#skill-cast {
-  position: absolute;
-  left: 50%;
-  top: 32%;
-  transform: translate(-50%, -50%) scale(0.82);
-  z-index: 26;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 20px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: rgba(5, 8, 13, 0.9);
-  opacity: 0;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  pointer-events: none;
-}
-
-#skill-cast[hidden] {
-  display: none;
-}
-
-#skill-cast.on {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-#skill-cast .skill-visual {
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
-  font-size: 1.5rem;
-  text-align: center;
-}
-
-#skill-cast .skill-visual img {
-  height: clamp(120px, 22vh, 220px);
-  width: auto;
-  max-width: 78vw;
-  border-radius: 10px;
-}
-
-#skill-cast .skill-visual small {
-  font-size: 0.8rem;
-}
-
-.skill-cast-who {
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  padding: 0.15rem 0.7rem;
-  border-radius: 999px;
-  color: #fff;
-}
-
-.skill-cast-who--me {
-  background: rgba(79, 125, 255, 0.95);
-}
-
-.skill-cast-who--opp {
-  background: rgba(255, 84, 112, 0.95);
-}
-
-/* ── seal HUD: both players' in-progress sequences + skill flash ──── */
-#seal-hud {
-  position: absolute;
-  top: 12%;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  width: max-content;
-  max-width: 92vw;
-}
-
-#seal-hud[hidden] {
-  display: none;
-}
-
-.seal-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-height: 2.3rem;
-}
-
-.seal-row[data-side="opp"] {
-  flex-direction: row-reverse;
-}
-
-.seal-row-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.seal-strip {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.seal-flash {
-  opacity: 0;
-  transform: scale(0.8);
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.seal-flash.on {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* ── on-screen seal pad (camera fallback / assist) ───────────────── */
-#seal-pad {
-  position: absolute;
-  right: 16px;
-  bottom: calc(var(--dock-h) + 14px);
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.4rem;
-  width: min(420px, 60vw);
-}
-
-#seal-pad[hidden] {
-  display: none;
-}
-
-.seal-btn {
-  display: grid;
-  place-items: center;
-  gap: 0.1rem;
-  padding: 0.45rem 0.2rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(30, 37, 52, 0.9);
-  color: var(--ink);
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
-}
-
-.seal-btn b {
-  font-size: 1.15rem;
-}
-
-.seal-btn small {
-  font-size: 0.55rem;
-  color: var(--muted);
-}
-
-.seal-btn.tapped {
-  background: var(--accent);
-  transform: scale(0.95);
-}
-
-/* ── jutsu dock: full-width strip across the bottom third ────────── */
-#skill-dock {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--dock-h);
-  min-height: 200px;
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--line);
-  background: rgba(14, 19, 28, 0.97);
-}
-
-#skill-dock[hidden] {
-  display: none;
-}
-
-.dock-title {
-  flex-shrink: 0;
-  align-self: center;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  line-height: 1.35;
-  color: var(--muted);
-  text-align: center;
-}
-
-.dock-row {
-  flex: 1;
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-}
-
-.skill-line {
-  flex: 1 1 0;
-  min-width: 190px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(30, 38, 54, 0.7);
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.skill-line.armed {
-  background: rgba(79, 125, 255, 0.16);
-  border-color: rgba(79, 125, 255, 0.6);
-}
-
-.skill-line.fired {
-  background: var(--accent);
-}
-
-.skill-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.4rem;
-}
-
-.skill-name b {
-  font-size: 1rem;
-  color: var(--ink);
-}
-
-.skill-name small {
-  display: block;
-  font-size: 0.64rem;
-  color: var(--muted);
-}
-
-.skill-tag {
-  flex-shrink: 0;
-  padding: 0.1rem 0.4rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 0.56rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-
-.skill-tag--attack {
-  color: #ff7043;
-  border-color: rgba(255, 112, 67, 0.5);
-}
-.skill-tag--reflect {
-  color: #b16bff;
-  border-color: rgba(177, 107, 255, 0.5);
-}
-.skill-tag--protect {
-  color: #35d0ba;
-  border-color: rgba(53, 208, 186, 0.5);
-}
-
-.skill-seals {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-content: flex-start;
-}
-
-.skill-seal {
-  width: clamp(48px, 9vh, 76px);
-  height: clamp(48px, 9vh, 76px);
-  border-radius: 8px;
-  opacity: 0.95;
-  filter: brightness(1.28) contrast(1.05) saturate(1.05);
-  transition: outline-color 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
-}
-
-.skill-seal.hit {
-  opacity: 1;
-  filter: brightness(1.4) contrast(1.05);
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  box-shadow: 0 0 10px rgba(79, 125, 255, 0.65);
-}
-
-.skill-line.fired .skill-seal {
-  outline: 2px solid #fff;
-}
-
-.skill-line.fired .skill-seal {
-  opacity: 1;
-}
-
-/* ── seal guide (press G): how to form each seal ────────────────── */
-#seal-guide {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(3, 5, 9, 0.68);
-  z-index: 20;
-}
-
-#seal-guide[hidden] {
-  display: none;
-}
-
-.seal-guide-card {
-  width: min(1080px, 95vw);
-  max-height: 92vh;
-  overflow-y: auto;
-  padding: 1.2rem 1.5rem 1.4rem;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(12, 16, 24, 0.98);
-}
-
-.seal-guide-card h3 {
-  margin: 0 0 0.9rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.9rem;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-}
-
-.seal-guide-close {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.8rem;
-  padding: 0.1rem 0.5rem;
-  cursor: pointer;
-}
-
-.seal-guide-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem 1.1rem;
-}
-
-@media (max-width: 760px) {
-  .seal-guide-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.seal-guide-cell {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.4rem;
-}
-
-.seal-cell--guide {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 22 / 14;
-  border-radius: 10px;
-  font-size: 3rem;
-  background: #0b0f17;
-}
-
-.seal-cell--guide img {
-  object-fit: contain;
-}
-
-.seal-guide-cell figcaption {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--ink);
-  text-align: center;
-}
-
-.seal-guide-cell figcaption span {
-  display: inline-block;
-  margin-left: 0.4rem;
-  font-size: 0.9rem;
-  font-weight: 400;
-  color: var(--muted);
-}
-
-.seal-guide-note {
-  margin: 1rem 0 0;
-  font-size: 0.7rem;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.seal-guide-note code {
-  color: var(--ink);
-}
-
-/* ── detector debug (press D) ───────────────────────────────────── */
-#detect-debug {
-  position: absolute;
-  left: 16px;
-  top: 16px;
-  margin: 0;
-  padding: 0.6rem 0.8rem;
-  max-width: 92vw;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: rgba(7, 10, 17, 0.92);
-  color: #cfe0ff;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 0.7rem;
-  line-height: 1.5;
-  white-space: pre;
-}
-
-#detect-debug[hidden] {
-  display: none;
-}
-
-/* ── jutsu key on the menu ──────────────────────────────────────── */
-.jutsu-key {
-  margin-top: 0.6rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-.jutsu-key div {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
-.jutsu-key b {
-  color: var(--ink);
-}
-
-.jutsu-key small {
-  opacity: 0.7;
-}
-
-.jutsu-key span {
-  letter-spacing: 0.15em;
-  color: var(--ink);
-}
-
-/* ── rolling battle log ──────────────────────────────────────────── */
-#battle-log {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--dock-h) + 14px);
-  transform: translateX(-50%);
-  width: min(420px, 50vw);
-  max-height: 96px;
-  overflow-y: auto;
-  padding: 0.5rem 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(7, 10, 17, 0.8);
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-#battle-log[hidden] {
-  display: none;
-}
-
-#battle-log div {
-  margin-bottom: 0.15rem;
+  letter-spacing: 0.02em;
 }
