@@ -1,11 +1,11 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family: "Segoe UI", system-ui, sans-serif;
   --bg: #070a11;
-  --panel: #141a26;
-  --line: #2c3346;
-  --ink: #eef1f8;
-  --muted: #8a93ad;
+  --panel: #e8dfc4;
+  --line: #c7bb98;
+  --ink: #33302a;
+  --muted: #756e5c;
   --accent: #4f7dff;
   --dock-h: 32vh; /* bottom third = the jutsu dock */
 }
@@ -31,6 +31,11 @@ body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  /* arena fills any gap the canvas / dock / panels don't cover — no black blocks
+     behind the camera windows or below the stage */
+  background:
+    linear-gradient(rgba(10, 13, 22, 0.32), rgba(10, 13, 22, 0.32)),
+    url("/assets/backgrounds/arena2.jpeg") center / cover no-repeat #070a11;
 }
 
 #stage {
@@ -39,6 +44,18 @@ body {
   left: 0;
   right: 0;
   height: calc(100vh - var(--dock-h)); /* battle renders in the top two-thirds */
+  /* fill the FIT letterbox around the canvas with the arena at the SAME scale
+     (height-fit, centred) so the image flows into the side bars with no black —
+     the gradient mimics the in-canvas wash */
+  background-color: #070a11;
+  background-image:
+    linear-gradient(rgba(10, 13, 22, 0.32), rgba(10, 13, 22, 0.32)),
+    url("/assets/backgrounds/arena2.jpeg");
+  background-position: center;
+  background-size:
+    cover,
+    auto 100%;
+  background-repeat: no-repeat;
 }
 
 #stage canvas {
@@ -57,6 +74,23 @@ body {
 }
 
 /* ── connect menu ────────────────────────────────────────────────── */
+
+/* full-screen tatami backdrop — only the room-code screens (menu + lobby);
+   the camera-check / start-gate wait runs over the real arena. */
+#lobby-bg {
+  display: none;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(6, 8, 12, 0.32), rgba(6, 8, 12, 0.44)),
+    url("/assets/backgrounds/lobby.jpg") center / cover no-repeat;
+}
+#overlay:has(> #menu:not([hidden])) #lobby-bg,
+#overlay:has(> #lobby:not([hidden])) #lobby-bg {
+  display: block;
+}
+
 #menu {
   position: absolute;
   top: 50%;
@@ -67,7 +101,7 @@ body {
   flex-direction: column;
   gap: 0.7rem;
   padding: 1.6rem;
-  background: rgba(20, 26, 38, 0.92);
+  background: rgba(230, 219, 192, 0.72);
   border: 1px solid var(--line);
   border-radius: 14px;
   backdrop-filter: blur(4px);
@@ -101,7 +135,7 @@ body {
 
 #menu input {
   padding: 0.5rem 0.6rem;
-  background: #0e121a;
+  background: #e3d9bd;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--ink);
@@ -141,7 +175,7 @@ body {
   min-height: 1rem;
   text-align: center;
   font-size: 0.78rem;
-  color: #ff8a5b;
+  color: #c94f22;
 }
 
 /* ── lobby (after connecting, before the opponent joins) ─────────── */
@@ -156,7 +190,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 1.8rem 1.6rem;
-  background: rgba(20, 26, 38, 0.95);
+  background: rgba(230, 219, 192, 0.76);
   border: 1px solid var(--line);
   border-radius: 14px;
   text-align: center;
@@ -218,7 +252,7 @@ body {
   text-align: center;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(5, 8, 13, 0.9);
+  background: rgba(230, 219, 191, 0.68);
   pointer-events: none;
 }
 
@@ -245,7 +279,7 @@ body {
 }
 
 .startgate-btn:disabled {
-  background: #2a3550;
+  background: #d7d0be;
   color: var(--muted);
   cursor: default;
 }
@@ -263,7 +297,7 @@ body {
   font-size: 1.1rem;
   font-weight: 800;
   letter-spacing: 0.14em;
-  color: #ffd166;
+  color: #9c6b12;
 }
 
 .prep-hint {
@@ -298,7 +332,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
-  background: #0e121a;
+  background: #e3d9bd;
   z-index: 4;
 }
 
@@ -330,7 +364,7 @@ body {
   right: 6px;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
-  background: rgba(7, 10, 17, 0.75);
+  background: rgba(229, 218, 191, 0.55);
   border: 1px solid var(--line);
   font-size: 0.66rem;
   font-weight: 700;
@@ -343,7 +377,7 @@ body {
   left: 6px;
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  background: rgba(7, 10, 17, 0.75);
+  background: rgba(229, 218, 191, 0.55);
   border: 1px solid var(--line);
   font-size: 0.66rem;
   font-weight: 600;
@@ -439,7 +473,7 @@ body {
   height: 2.1rem;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(7, 10, 17, 0.8);
+  background: rgba(229, 218, 191, 0.6);
   font-size: 1.2rem;
   font-weight: 700;
   color: var(--ink);
@@ -524,8 +558,8 @@ body {
   gap: 8px;
   padding: 5px 12px 5px 6px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(5, 8, 13, 0.92);
+  border-radius: 10px;
+  background: rgba(230, 219, 191, 0.72);
   opacity: 0;
   transition: opacity 0.16s ease, transform 0.16s ease;
   pointer-events: none;
@@ -586,7 +620,11 @@ body {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  min-height: 2.3rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(230, 219, 192, 0.64); /* cream panel so it reads over the arena */
+  border: 1px solid var(--line);
 }
 
 .seal-row[data-side="opp"] {
@@ -629,7 +667,7 @@ body {
   gap: 10px;
   padding: 6px 10px;
   border-top: 1px solid var(--line);
-  background: rgba(14, 19, 28, 0.97);
+  background: rgba(228, 217, 190, 0.8);
 }
 
 #skill-dock[hidden] {
@@ -693,7 +731,7 @@ body {
   padding: 7px 11px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(30, 38, 54, 0.7);
+  background: rgba(224, 212, 183, 0.5);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -822,7 +860,7 @@ body {
   padding: 8px 12px;
   border: 1px dashed rgba(255, 209, 102, 0.5);
   border-radius: 12px;
-  background: rgba(7, 10, 17, 0.7);
+  background: rgba(229, 218, 191, 0.5);
   z-index: 22;
 }
 
@@ -834,7 +872,7 @@ body {
   font-size: 0.56rem;
   font-weight: 800;
   letter-spacing: 0.14em;
-  color: #ffd166;
+  color: #9c6b12;
 }
 
 .skill-test-btn {
@@ -843,13 +881,13 @@ body {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(30, 38, 54, 0.9);
+  background: rgba(224, 212, 183, 0.7);
   color: var(--ink);
   cursor: pointer;
 }
 
 .skill-test-btn:hover {
-  border-color: #ffd166;
+  border-color: #9c6b12;
 }
 
 .skill-test-btn b {
@@ -867,7 +905,7 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(3, 5, 9, 0.68);
+  background: rgba(226, 214, 185, 0.48);
   z-index: 20;
 }
 
@@ -882,7 +920,7 @@ body {
   padding: 1.2rem 1.5rem 1.4rem;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(12, 16, 24, 0.98);
+  background: rgba(229, 217, 189, 0.8);
 }
 
 .seal-guide-card h3 {
@@ -931,7 +969,7 @@ body {
   aspect-ratio: 4 / 3; /* match the supplied seal images — no letterbox */
   border-radius: 10px;
   font-size: 3rem;
-  background: #0b0f17;
+  background: #e3d9bd;
 }
 
 .seal-guide-cell figcaption {
@@ -970,8 +1008,8 @@ body {
   max-width: 92vw;
   border: 1px solid var(--accent);
   border-radius: 8px;
-  background: rgba(7, 10, 17, 0.92);
-  color: #cfe0ff;
+  background: rgba(229, 218, 191, 0.72);
+  color: #2b4c7a;
   font-family: "SF Mono", Menlo, monospace;
   font-size: 0.7rem;
   line-height: 1.5;
@@ -1023,7 +1061,7 @@ body {
   padding: 0.5rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(7, 10, 17, 0.8);
+  background: rgba(229, 218, 191, 0.6);
   font-family: "SF Mono", Menlo, monospace;
   font-size: 0.72rem;
   color: var(--muted);
@@ -1049,7 +1087,7 @@ body {
   text-align: center;
   border: 1px solid #6a4bd6;
   border-radius: 14px;
-  background: rgba(9, 6, 20, 0.93);
+  background: rgba(228, 216, 188, 0.73);
   box-shadow: 0 0 40px rgba(106, 75, 214, 0.35);
   pointer-events: none;
 }
@@ -1071,7 +1109,7 @@ body {
   font-size: 1.15rem;
   font-weight: 800;
   letter-spacing: 0.14em;
-  color: #c4a7ff;
+  color: #5b3fb0;
 }
 
 .contest-hint {

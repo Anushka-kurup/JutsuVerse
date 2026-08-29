@@ -12,15 +12,8 @@ export class BackgroundLayer {
       const bg = scene.add.image(STAGE_WIDTH / 2, STAGE_HEIGHT / 2, "bg-arena").setScrollFactor(0);
       const cover = Math.max(STAGE_WIDTH / bg.width, STAGE_HEIGHT / bg.height);
       bg.setScale(cover);
-      // gentle parallax drift
-      scene.tweens.add({
-        targets: bg,
-        x: bg.x - 16,
-        duration: 9000,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut",
-      });
+      // no parallax drift — must stay aligned with the CSS arena that fills the
+      // FIT letterbox around the canvas (see #stage in style.css)
     } else {
       scene.add.rectangle(0, 0, STAGE_WIDTH, STAGE_HEIGHT, 0x141a2e).setOrigin(0).setScrollFactor(0);
     }

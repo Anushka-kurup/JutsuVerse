@@ -12,7 +12,8 @@ export class ShieldRow {
   constructor(scene: Phaser.Scene, x: number, y: number, align: -1 | 1) {
     const originX = align === -1 ? 0 : 1;
     for (let i = 0; i < MAX_SHIELDS; i++) {
-      const offset = (SIZE + GAP) * i * align;
+      // pip 0 hugs the HP bar's near edge; the row grows toward centre-screen
+      const offset = (SIZE + GAP) * i * -align;
       const pip = scene.add
         .rectangle(offset, 0, SIZE, SIZE, 0x35d0ba)
         .setOrigin(originX, 0.5)

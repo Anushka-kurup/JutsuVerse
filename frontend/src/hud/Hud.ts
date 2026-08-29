@@ -46,9 +46,10 @@ export class Hud {
 
   private buildSide(scene: Phaser.Scene, x: number, align: -1 | 1, name: string): SideWidgets {
     const hp = new HealthBar(scene, x, 40, align, name);
-    const shields = new ShieldRow(scene, x, 58, align);
+    // HP bar bottom ≈ 49; pip h=14 → y=63 leaves a ~7px gap below the bar
+    const shields = new ShieldRow(scene, x, 63, align);
     const meta = scene.add
-      .text(x, 70, "", { fontFamily: "monospace", fontSize: "12px", color: "#8a93ad" })
+      .text(x, 78, "", { fontFamily: "monospace", fontSize: "12px", color: "#8a93ad" })
       .setOrigin(align === -1 ? 0 : 1, 0)
       .setScrollFactor(0);
     return { hp, shields, meta };

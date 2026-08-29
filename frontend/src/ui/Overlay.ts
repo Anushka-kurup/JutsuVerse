@@ -45,6 +45,7 @@ class OverlayController {
     this.app.innerHTML = `
       <div id="stage"></div>
       <div id="overlay">
+        <div id="lobby-bg"></div>
         <form id="menu" autocomplete="off">
           <h1>忍 JUTSUVERSE</h1>
           <p class="tagline">Form the seals. The server referees.</p>
