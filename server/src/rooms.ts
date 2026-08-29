@@ -33,9 +33,8 @@ function generateCode(): string {
   throw new Error("could not allocate room code");
 }
 
-export function createRoom(requestedCode?: string): Room {
-  const code = requestedCode?.trim().toUpperCase() || generateCode();
-  if (rooms.has(code)) throw new Error("room_exists");
+export function createRoom(): Room {
+  const code = generateCode();
   const room: Room = {
     code,
     players: new Map(),
@@ -57,8 +56,13 @@ export function joinRoom(
   const name = (opts.name ?? "Ronin").slice(0, 24);
   let room: Room;
   if (opts.code) {
-    const requestedCode = opts.code.trim().toUpperCase();
-    room = getRoom(requestedCode) ?? createRoom(requestedCode);
+    const found = getRoom(opts.code);
+    if (!found) {
+      const err = new Error("room_not_found");
+      err.name = "room_not_found";
+      throw err;
+    }
+    room = found;
   } else {
     room = createRoom();
   }

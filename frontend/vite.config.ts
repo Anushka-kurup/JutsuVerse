@@ -10,8 +10,15 @@ export default defineConfig({
     alias: { "@jutsu/protocol": protocolSrc },
   },
   server: {
+    host: true,
+    port: 5173,
     // src/types.ts imports ../../shared/*.ts and ../../packages/* — allow outside frontend/
     fs: { allow: [repoRoot] },
+    // same-origin `/ws` so LAN clients never type a server URL
+    proxy: {
+      "/ws": { target: "ws://127.0.0.1:8080", ws: true },
+      "/health": "http://127.0.0.1:8080",
+    },
   },
   // onnxruntime-web ships its own wasm loader; pre-bundling it breaks that
   optimizeDeps: { exclude: ["onnxruntime-web", "@jutsu/protocol"] },

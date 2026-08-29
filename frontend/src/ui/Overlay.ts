@@ -35,11 +35,10 @@ class OverlayController {
         <form id="menu" autocomplete="off">
           <h1>忍 JUTSUVERSE</h1>
           <p class="tagline">Form the seals. The server referees.</p>
-          <label>Server <input name="server" value="${session.server}" /></label>
-          <label>Your name <input name="player" value="${session.player}" /></label>
+          <label>Your name <input name="player" value="${session.player}" maxlength="24" autocomplete="off" /></label>
           <button type="submit" data-act="create">Create room</button>
           <div class="menu-or">— or —</div>
-          <label>Room code <input name="room" value="" placeholder="ABCDEF" maxlength="8" /></label>
+          <label>Room code <input name="room" value="" placeholder="leave blank to create" maxlength="8" autocomplete="off" spellcheck="false" /></label>
           <button type="button" data-act="join">Join room</button>
           <div class="menu-error"></div>
           <div class="jutsu-key">${this.jutsuKeyHtml()}</div>
@@ -117,22 +116,25 @@ class OverlayController {
     const go = (room: string): void => {
       const data = new FormData(this.menu as HTMLFormElement);
       const opts = {
-        server: String(data.get("server") ?? "").trim(),
         room,
         player: String(data.get("player") ?? "").trim() || "Ronin",
       };
-      if (!opts.server) return;
       Object.assign(session, opts);
       this.setMenuError("");
       bus.emit(Events.CONNECT_REQUEST, opts);
     };
+
+    const roomInput = this.menu.querySelector<HTMLInputElement>('input[name="room"]')!;
+    roomInput.addEventListener("input", () => {
+      roomInput.value = roomInput.value.toUpperCase();
+    });
 
     this.menu.addEventListener("submit", (e) => {
       e.preventDefault(); // "Create room" — no code, server allocates one
       go("");
     });
     this.menu.querySelector<HTMLButtonElement>('[data-act="join"]')!.addEventListener("click", () => {
-      const code = this.menu.querySelector<HTMLInputElement>('input[name="room"]')!.value.trim();
+      const code = roomInput.value.trim().toUpperCase();
       if (!code) {
         this.setMenuError("enter a room code to join");
         return;

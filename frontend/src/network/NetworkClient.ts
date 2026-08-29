@@ -1,9 +1,13 @@
 import { bus, Events } from "../core/EventBus";
-import type { ClientMsg, ConnectOpts, Edge, FighterPublic, Seat, ServerMsg, Sign } from "../types";
+import { GameSocket } from "../net/wsClient";
+import type { ConnectOpts, Edge, FighterPublic, Seat, ServerMsg, Sign } from "../types";
 
 /**
- * Owns the raw WebSocket to the game server (@jutsu/protocol). The server does
- * all the game logic — sequence matching, damage, energy — so this just:
+ * Game socket to the authoritative server (@jutsu/protocol). The connection
+ * itself is same-origin `/ws` (Vite proxies it in dev) and stays open for the
+ * page lifetime — join / leave / ready / input are messages on that socket.
+ *
+ * Game logic stays on the server. This client:
  *   - join / ready / reset
  *   - stream confirmed seals as input edges (down then up)
  *   - turn `state` / `match_state` frames into bus events
@@ -11,8 +15,7 @@ import type { ClientMsg, ConnectOpts, Edge, FighterPublic, Seat, ServerMsg, Sign
  * Knows nothing about Phaser or the DOM.
  */
 export class NetworkClient {
-  private ws: WebSocket | null = null;
-  private queued: ClientMsg[] = [];
+  private sock = new GameSocket();
   private seq = 0;
   private seat: Seat | null = null;
   private code = "";
@@ -20,8 +23,20 @@ export class NetworkClient {
 
   myId = "";
 
+  constructor() {
+    this.sock.onopen = () => bus.emit(Events.NET_OPEN);
+    this.sock.onclose = () => {
+      this.seat = null;
+      this.code = "";
+      this.peer = false;
+      bus.emit(Events.NET_CLOSE);
+    };
+    this.sock.onerror = () => bus.emit(Events.NET_ERROR, "Could not reach server");
+    this.sock.connect((msg) => this.route(msg));
+  }
+
   get connected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.sock.connected;
   }
   get mySeat(): Seat | null {
     return this.seat;
@@ -33,50 +48,28 @@ export class NetworkClient {
     return this.peer;
   }
 
+  /** Join a room (or create one if `opts.room` is empty). Reuses the live socket. */
   connect(opts: ConnectOpts): void {
-    this.disconnect();
     this.myId = opts.player;
-    const ws = new WebSocket(wsUrl(opts.server));
-    this.ws = ws;
-
-    ws.addEventListener("open", () => {
-      // no room code → server allocates one and returns it in `joined`.
-      // We do NOT auto-ready — the client sends `ready` only once the local
-      // camera is on (BattleScene), so the match goes `live` = both cameras ready.
-      const room = opts.room.trim();
-      this.raw(room ? { type: "join", code: room, name: opts.player } : { type: "join", name: opts.player });
-      for (const m of this.queued.splice(0)) ws.send(JSON.stringify(m));
-      bus.emit(Events.NET_OPEN);
-    });
-
-    ws.addEventListener("message", (e) => {
-      let msg: ServerMsg;
-      try {
-        msg = JSON.parse(String(e.data)) as ServerMsg;
-      } catch {
-        return;
-      }
-      this.route(msg);
-    });
-
-    ws.addEventListener("close", () => {
-      if (this.ws === ws) {
-        this.ws = null;
-        bus.emit(Events.NET_CLOSE);
-      }
-    });
-    ws.addEventListener("error", () => bus.emit(Events.NET_ERROR, "Could not reach server"));
+    this.seq = 0;
+    this.sock.connect((msg) => this.route(msg));
+    // same socket can leave then join; drop a stale seat so a rematch-from-menu works
+    if (this.seat !== null) {
+      this.sock.send({ type: "leave" });
+      this.seat = null;
+      this.code = "";
+      this.peer = false;
+    }
+    const room = opts.room.trim().toUpperCase();
+    this.sock.send(room ? { type: "join", code: room, name: opts.player } : { type: "join", name: opts.player });
   }
 
+  /** Leave the current room. The socket stays open for the next join. */
   disconnect(): void {
-    const ws = this.ws;
-    this.ws = null;
     this.seat = null;
     this.code = "";
     this.peer = false;
-    this.queued = [];
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "leave" }));
-    ws?.close();
+    this.sock.send({ type: "leave" });
   }
 
   private route(msg: ServerMsg): void {
@@ -132,37 +125,22 @@ export class NetworkClient {
 
   /** tell the server this player is ready (sent once the local camera is on) */
   ready(): void {
-    this.raw({ type: "ready" });
+    this.sock.send({ type: "ready" });
   }
 
   reset(): void {
-    this.raw({ type: "reset" });
-    this.raw({ type: "ready" }); // rematch: cameras already on, go straight to the countdown
+    this.sock.send({ type: "reset" });
+    this.sock.send({ type: "ready" }); // rematch: cameras already on, go straight to the countdown
   }
 
   /** WebRTC signalling passthrough for VideoCall */
   signal(payload: unknown): void {
-    this.raw({ type: "signal", payload });
+    this.sock.send({ type: "signal", payload });
   }
 
   private input(sign: Sign, edge: Edge): void {
-    this.raw({ type: "input", seq: ++this.seq, sign, edge, tClient: performance.now() });
+    this.sock.send({ type: "input", seq: ++this.seq, sign, edge, tClient: performance.now() });
   }
-
-  private raw(msg: ClientMsg): void {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
-    else this.queued.push(msg);
-  }
-}
-
-function wsUrl(server: string): string {
-  const u = new URL(server);
-  if (u.protocol === "http:") u.protocol = "ws:";
-  if (u.protocol === "https:") u.protocol = "wss:";
-  u.pathname = "/ws";
-  u.search = "";
-  u.hash = "";
-  return u.toString();
 }
 
 // keep in sync with @jutsu/protocol SIGNS
