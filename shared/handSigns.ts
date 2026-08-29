@@ -10,10 +10,10 @@
  *   raw 0→子 Rat   raw 1→丑 Ox     raw 2→寅 Tiger   raw 3→卯 Hare
  *   raw 4→辰 Dragon raw 5→巳 Snake  raw 6→午 Horse   raw 7→未 Ram
  *   raw 8→申 Monkey raw 9→酉 Bird   raw 10→戌 Dog    raw 11→亥 Boar
- *   raw 12→壬 Mizunoe raw 13→祈 Gassho
+ *   raw 12→祈 Gassho raw 13→謎 Unknown  raw 14→壬 Mizunoe
  *
- * The ONNX head emits 16 class slots (output [1,3549,21] → 21-5), but the app
- * accepts exactly 0..13. Raw classes 14 and 15 are ignored by the detector.
+ * The ONNX head emits 16 class slots (output [1,3549,21] → 21-5); only 0..14 are
+ * real, index 15 is a spare the model effectively never fires.
  */
 export interface HandSign {
   /** stable lowercase id used everywhere in code + asset filenames */
@@ -37,8 +37,10 @@ export const HAND_SIGNS: HandSign[] = [
   { id: "bird", kanji: "酉", en: "Bird" }, // 9
   { id: "dog", kanji: "戌", en: "Dog" }, // 10
   { id: "boar", kanji: "亥", en: "Boar" }, // 11
-  { id: "mizunoe", kanji: "壬", en: "Mizunoe" }, // 12
-  { id: "gassho", kanji: "祈", en: "Gassho" }, // 13
+  { id: "gassho", kanji: "祈", en: "Gassho" }, // 12
+  { id: "unknown", kanji: "謎", en: "Unknown" }, // 13
+  { id: "mizunoe", kanji: "壬", en: "Mizunoe" }, // 14
+  { id: "none", kanji: "—", en: "None" }, // 15 — spare slot, effectively never emitted
 ];
 
 const BY_ID = new Map(HAND_SIGNS.map((s) => [s.id, s]));
@@ -46,7 +48,9 @@ const BY_ID = new Map(HAND_SIGNS.map((s) => [s.id, s]));
 export const signByIndex = (i: number): HandSign | undefined => HAND_SIGNS[i];
 export const signById = (id: string): HandSign | undefined => BY_ID.get(id);
 
-/** All and only the 14 valid game seals (raw model classes 0..13). */
-export const SEAL_IDS = HAND_SIGNS.map((s) => s.id);
+/** ids that are real, castable seals (excludes the none/unknown display helpers) */
+export const SEAL_IDS = HAND_SIGNS.filter(
+  (s) => s.id !== "none" && s.id !== "unknown",
+).map((s) => s.id);
 
-export const isSeal = (id: string): boolean => BY_ID.has(id);
+export const isSeal = (id: string): boolean => id !== "none" && id !== "unknown" && BY_ID.has(id);

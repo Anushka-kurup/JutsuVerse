@@ -1,8 +1,8 @@
 import { bus, Events } from "../core/EventBus";
 import { isSeal } from "../types";
 
-const CONFIRM_MS = 3000; // hold a sign steady this long → commit it and send to the server
-const GRACE_MS = 1000; // gaps / wrong-sign blips shorter than this don't reset the countdown
+const CONFIRM_MS = 300; // hold a sign steady this long → commit it and send to the server
+const GRACE_MS = 100; // gaps / wrong-sign blips shorter than this don't reset the countdown
 
 /**
  * Confirms camera-detected seals. The SERVER does the sequence → jutsu matching
