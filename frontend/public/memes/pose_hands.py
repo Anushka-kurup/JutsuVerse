@@ -14,6 +14,17 @@ process() returns an object shaped like Holistic's result (.pose_landmarks,
 capture/predict scripts don't need to know the difference.
 """
 
+import os
+
+import certifi
+
+# MediaPipe downloads model variants (e.g. the "Lite" pose model below) over
+# HTTPS on first use. python.org's macOS installer doesn't wire the stdlib
+# ssl module into the system cert store, so that download can fail with
+# CERTIFICATE_VERIFY_FAILED on a fresh venv -- point it at certifi's bundle
+# instead of depending on the user's shell having this set already.
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+
 import mediapipe as mp
 
 mp_pose = mp.solutions.pose
@@ -30,15 +41,25 @@ class PoseHandsResult:
 
 
 class PoseHandsTracker:
-    """Drop-in, face-free replacement for mp.solutions.holistic.Holistic."""
+    """Drop-in, face-free replacement for mp.solutions.holistic.Holistic.
 
-    def __init__(self, min_detection_confidence=0.5, min_tracking_confidence=0.5):
+    model_complexity defaults to MediaPipe's own default (1, "Full") for
+    capture_clips.py, where accuracy matters more than speed and it only
+    runs while a clip is actively being recorded. live_predict.py runs this
+    on every camera frame continuously, so it passes model_complexity=0
+    ("Lite") for lower per-frame latency -- same tradeoff the browser makes
+    with pose_landmarker_lite.task.
+    """
+
+    def __init__(self, min_detection_confidence=0.5, min_tracking_confidence=0.5, model_complexity=1):
         self._pose = mp_pose.Pose(
+            model_complexity=model_complexity,
             min_detection_confidence=min_detection_confidence,
             min_tracking_confidence=min_tracking_confidence,
         )
         self._hands = mp_hands.Hands(
             max_num_hands=2,
+            model_complexity=model_complexity,
             min_detection_confidence=min_detection_confidence,
             min_tracking_confidence=min_tracking_confidence,
         )

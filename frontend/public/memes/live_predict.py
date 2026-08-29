@@ -35,6 +35,18 @@ with the elapsed time, exactly like what makes a player win a round. Press
 'r' to reset the timer and try again. Without --target this is just a live
 recognition-quality display (current prediction + confidence).
 
+--min-confidence defaults to 0.4. The classifier is forced-choice -- every
+frame gets assigned to ONE of the trained labels, there's no "not a
+gesture" output -- so standing there doing nothing still scores as SOME
+label, and chance alone is already ~1/11 (9%) with this many classes. Too
+low a floor confirms neutral/idle frames, not just weak-but-real attempts.
+0.4 sits close to the model's own ~0.33 mean confidence on its exact
+training rows: high enough that doing nothing won't confirm, but a
+RandomForest over this many classes still spreads probability mass thin
+even when its top pick is right, so don't push this much higher -- the
+correct class often sits well under 0.5 even on training rows, while the
+top pick (argmax, ignoring the raw probability) is ~95% accurate held-out.
+
 six_seven still gets its own dedicated crossing-detector display at the
 bottom of the window: a window classifier can tell "this looks like a
 six_seven-shaped motion" but the crossing-detector is the more reliable
@@ -97,8 +109,9 @@ def main():
     parser.add_argument("--camera-index", type=int, default=1,
                          help="cv2.VideoCapture device index -- defaults to 1 since on this machine "
                               "index 0 grabs an iPhone Continuity Camera instead of the built-in webcam")
-    parser.add_argument("--min-confidence", type=float, default=0.6,
-                         help="minimum prediction probability to count a gesture as confirmed")
+    parser.add_argument("--min-confidence", type=float, default=0.4,
+                         help="minimum prediction probability to count a gesture as confirmed -- "
+                              "see the module docstring for why this value")
     parser.add_argument("--clip-seconds", type=float, default=1.5,
                          help="must match --clip-seconds used in capture_clips.py")
     parser.add_argument("--keyframes", type=int, default=8,
@@ -113,14 +126,29 @@ def main():
     if target and target not in [l.upper() for l in labels]:
         print(f"Warning: --target {args.target!r} doesn't match any trained label: {labels}")
 
-    # lower thresholds than the old hands-only 0.7/0.6 -- pose lock-on at
-    # typical desk-webcam framing is less confident than close-up hand
-    # tracking, and the visibility gate in pose_is_usable() already filters
-    # out genuinely bad readings, so this doesn't trade away quality
-    tracker = PoseHandsTracker(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+    # Deliberately loose -- same call the browser's own hand tracker already
+    # made (see lab/tracker.ts: 0.35/0.35/0.25). The classifier itself is
+    # solid (~95% held-out accuracy on the current dataset); the thing
+    # actually limiting how much gets recognized is MediaPipe's OWN pose/hand
+    # detection failing to lock on at all under normal desk-webcam framing,
+    # not classifier confidence -- and the visibility gate in
+    # pose_is_usable() already filters out genuinely bad readings, so
+    # loosening this doesn't trade away quality, it just stops throwing away
+    # frames MediaPipe was actually willing to track.
+    #
+    # model_complexity stays at PoseHandsTracker's default (1, "Full"): the
+    # Lite model is faster but measurably less accurate at exactly the arm
+    # poses (mog/dab/etc.) this pipeline depends on, and a faster loop that
+    # detects less isn't the tradeoff wanted here.
+    tracker = PoseHandsTracker(min_detection_confidence=0.35, min_tracking_confidence=0.3)
     print(f"Opening camera index {args.camera_index} (use --camera-index N to pick a different one; "
           f"run list_cameras.py if you're not sure which is your webcam)")
     cap = cv2.VideoCapture(args.camera_index)
+    # more pixels on the person is the single biggest lever on detection rate
+    # (same finding as lab/tracker.ts) -- ask for a bigger frame than the
+    # camera's low default, rather than shrinking it for speed
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
     if not cap.isOpened() or not cap.read()[0]:
         print(f"Couldn't read from camera index {args.camera_index}. "
@@ -181,6 +209,8 @@ def main():
                 confirmed_label = label
             else:
                 text += "  [low confidence]"
+            print(f"[predict] {label:16s} {proba:5.0%}  frames={len(window):2d}"
+                  f"{'  CONFIRMED' if confirmed_label else ''}")
 
         if target and recognized_at is None and confirmed_label and confirmed_label.upper() == target:
             recognized_at = now - round_started_at
