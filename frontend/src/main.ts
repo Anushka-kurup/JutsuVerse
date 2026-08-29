@@ -1,135 +1,326 @@
 import "./style.css";
-import { SIGNS, type ClientMessage, type MatchPublic, type PlayerPublic, type ServerMessage } from "./types";
+import {
+  MAX_HP,
+  type Edge,
+  type FighterPublic,
+  type Seat,
+  type ServerMsg,
+  type Sign,
+} from "@jutsu/protocol";
 import { initHandSignDetector, startCamera, stopCamera, detectFrame, drawDetections } from "./handTracker";
+import { GameSocket } from "./net/wsClient";
+import { KEY_MAP, MOVE_HINTS, PLAYABLE, SIGN_DEFS } from "./types";
 
-const SEND_INTERVAL_MS = 150;
-const VALID_SIGNS = new Set(SIGNS.map((s) => s.sign)); // TIGER/SNAKE/BIRD/RAM/BOAR
+const HYSTERESIS = 4;
+const KEEP_MS = 200;
+const EMPTY: FighterPublic = {
+  hp: MAX_HP,
+  stance: "idle",
+  moveId: null,
+  buffer: [],
+  held: [],
+  guardLeft: 0,
+};
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
+const socket = new GameSocket();
 
-let ws: WebSocket | null = null;
-let myId = "";
-let holdTimer: number | null = null;
+type Screen = "lobby" | "waiting" | "duel" | "ended";
 
-// ── camera-driven sign detection ────────────────────────────────
+let screen: Screen = "lobby";
+let errorMsg: string | null = null;
+let seat: Seat = "a";
+let roomCode = "";
+let youName = "Ronin";
+let foeName = "Opponent";
+let a: FighterPublic = EMPTY;
+let b: FighterPublic = EMPTY;
+let winner: Seat | "draw" | null = null;
+let readySent = false;
+let held = new Set<Sign>();
+let signButtons: Partial<Record<Sign, HTMLButtonElement>> = {};
+let keepTimer: number | null = null;
+let keysBound = false;
+
 let cameraOn = false;
 let cameraLoopId: number | null = null;
-let activeCamSign = "UNKNOWN";
-let signButtons: Record<string, HTMLButtonElement> = {};
+let camCandidate: Sign | null = null;
+let camCandidateCount = 0;
+let camHeld: Sign | null = null;
 
-// ── peer-to-peer video call (see opponent's webcam) ───────────────
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 let peerConnection: RTCPeerConnection | null = null;
 let localStream: MediaStream | null = null;
-let opponentId: string | null = null;
-let isInitiator = false;
+let peerPresent = false;
 let pendingOffer: RTCSessionDescriptionInit | null = null;
 let pendingIce: RTCIceCandidateInit[] = [];
 
-// ── connect screen ──────────────────────────────────────────────
-function renderConnectScreen(errorMsg?: string) {
+type SignalPayload =
+  | { kind: "offer"; sdp: RTCSessionDescriptionInit }
+  | { kind: "answer"; sdp: RTCSessionDescriptionInit }
+  | { kind: "ice"; candidate: RTCIceCandidateInit };
+
+function emit(sign: Sign, edge: Edge) {
+  if (edge === "down") held.add(sign);
+  else held.delete(sign);
+  signButtons[sign]?.classList.toggle("holding", held.has(sign));
+  socket.send({
+    type: "input",
+    seq: socket.nextSeq,
+    sign,
+    edge,
+    tClient: performance.now(),
+  });
+}
+
+function releaseAll() {
+  for (const sign of [...held]) emit(sign, "up");
+}
+
+function startKeepalive() {
+  stopKeepalive();
+  keepTimer = window.setInterval(() => {
+    for (const sign of held) {
+      socket.send({
+        type: "input",
+        seq: socket.nextSeq,
+        sign,
+        edge: "down",
+        tClient: performance.now(),
+      });
+    }
+  }, KEEP_MS);
+}
+
+function stopKeepalive() {
+  if (keepTimer !== null) {
+    window.clearInterval(keepTimer);
+    keepTimer = null;
+  }
+}
+
+function onKeyDown(ev: KeyboardEvent) {
+  if (screen !== "duel") return;
+  const target = ev.target as HTMLElement | null;
+  if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+  const sign = KEY_MAP[ev.key];
+  if (!sign || ev.repeat || held.has(sign)) return;
+  ev.preventDefault();
+  emit(sign, "down");
+}
+
+function onKeyUp(ev: KeyboardEvent) {
+  if (screen !== "duel") return;
+  const sign = KEY_MAP[ev.key];
+  if (!sign || !held.has(sign)) return;
+  ev.preventDefault();
+  emit(sign, "up");
+}
+
+function bindKeys() {
+  if (keysBound) return;
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", releaseAll);
+  keysBound = true;
+}
+
+function unbindKeys() {
+  if (!keysBound) return;
+  window.removeEventListener("keydown", onKeyDown);
+  window.removeEventListener("keyup", onKeyUp);
+  window.removeEventListener("blur", releaseAll);
+  keysBound = false;
+}
+
+function enterDuel() {
+  if (screen === "duel") return;
+  screen = "duel";
+  if (!readySent) {
+    socket.send({ type: "ready" });
+    readySent = true;
+  }
+  render();
+}
+
+function goLobby(message?: string) {
+  teardownDuel();
+  screen = "lobby";
+  errorMsg = message ?? null;
+  readySent = false;
+  peerPresent = false;
+  a = EMPTY;
+  b = EMPTY;
+  winner = null;
+  foeName = "Opponent";
+  roomCode = "";
+  render();
+}
+
+function teardownDuel() {
+  stopKeepalive();
+  unbindKeys();
+  releaseAll();
+  shutdownCamera();
+  resetWebRTC();
+}
+
+function handleServer(msg: ServerMsg) {
+  switch (msg.type) {
+    case "joined":
+      seat = msg.seat;
+      roomCode = msg.code;
+      youName = msg.name;
+      errorMsg = null;
+      peerPresent = msg.peerPresent;
+      if (msg.peerPresent) enterDuel();
+      else {
+        screen = "waiting";
+        render();
+      }
+      break;
+    case "peer_joined":
+      foeName = msg.name;
+      peerPresent = true;
+      enterDuel();
+      break;
+    case "peer_left":
+      teardownDuel();
+      screen = "ended";
+      render();
+      break;
+    case "state":
+      a = msg.a;
+      b = msg.b;
+      if (screen === "duel") updateGameScreen();
+      break;
+    case "match_state":
+      if (msg.phase === "ended") {
+        winner = msg.winner ?? null;
+        teardownDuel();
+        screen = "ended";
+        render();
+      }
+      break;
+    case "signal":
+      handleSignal(msg.payload);
+      break;
+    case "error":
+      if (screen === "lobby" || screen === "waiting") {
+        goLobby(msg.message);
+      } else {
+        errorMsg = msg.message;
+      }
+      break;
+  }
+}
+
+function handleSignal(payload: unknown) {
+  if (!payload || typeof payload !== "object") return;
+  const data = payload as SignalPayload;
+  if (data.kind === "offer") handleRemoteOffer(data.sdp).catch(console.error);
+  else if (data.kind === "answer") peerConnection?.setRemoteDescription(data.sdp).catch(console.error);
+  else if (data.kind === "ice") handleRemoteIce(data.candidate).catch(console.error);
+}
+
+function render() {
+  if (screen === "lobby") renderLobby();
+  else if (screen === "waiting") renderWaiting();
+  else if (screen === "ended") renderEnded();
+  else renderGameScreen();
+}
+
+function renderLobby() {
   app.innerHTML = `
     <h1>忍 JUTSUVERSE</h1>
+    <p class="lede">
+      Real-time 1v1. Sequences are moves —
+      <kbd>TIGER SNAKE RAM</kbd> tiger,
+      <kbd>BOAR SNAKE</kbd> guard.
+      Create a room, share the code.
+    </p>
     <div class="card">
       <div class="field">
-        <label for="server">Server</label>
-        <input id="server" value="ws://localhost:8000" />
+        <label for="name">Name</label>
+        <input id="name" value="${escapeAttr(youName)}" maxlength="24" placeholder="Ronin" autocomplete="off" />
       </div>
       <div class="field">
-        <label for="room">Room</label>
-        <input id="room" value="match1" />
+        <label for="code">Room code</label>
+        <input id="code" value="" maxlength="8" placeholder="leave blank to create" autocomplete="off" spellcheck="false" />
       </div>
-      <div class="field">
-        <label for="player">Player ID</label>
-        <input id="player" value="p1" />
-      </div>
-      <button class="connect-btn" id="connect">Connect</button>
-      ${errorMsg ? `<div class="status" style="color:#ff5470">${errorMsg}</div>` : ""}
+      ${errorMsg ? `<div class="status" style="color:#ff5470">${escapeHtml(errorMsg)}</div>` : ""}
+      <button class="connect-btn" id="go">Create duel</button>
     </div>
   `;
 
-  document.querySelector<HTMLButtonElement>("#connect")!.addEventListener("click", () => {
-    const server = document.querySelector<HTMLInputElement>("#server")!.value.trim();
-    const room = document.querySelector<HTMLInputElement>("#room")!.value.trim();
-    const player = document.querySelector<HTMLInputElement>("#player")!.value.trim();
-    if (!server || !room || !player) return;
-    connect(server, room, player);
+  const nameEl = document.querySelector<HTMLInputElement>("#name")!;
+  const codeEl = document.querySelector<HTMLInputElement>("#code")!;
+  const go = document.querySelector<HTMLButtonElement>("#go")!;
+
+  const syncLabel = () => {
+    go.textContent = codeEl.value.trim() ? "Join duel" : "Create duel";
+  };
+  codeEl.addEventListener("input", () => {
+    codeEl.value = codeEl.value.toUpperCase();
+    syncLabel();
+  });
+  go.addEventListener("click", () => {
+    const name = nameEl.value.trim() || "Ronin";
+    youName = name;
+    const code = codeEl.value.trim().toUpperCase();
+    if (code) socket.send({ type: "join", name, code });
+    else socket.send({ type: "join", name });
   });
 }
 
-// ── websocket ────────────────────────────────────────────────────
-function connect(server: string, room: string, player: string) {
-  myId = player;
-  const socket = new WebSocket(`${server}/ws/${room}/${player}`);
-
-  socket.addEventListener("open", () => {
-    ws = socket;
-    renderGameScreen();
-  });
-
-  socket.addEventListener("message", (event) => {
-    const msg: ServerMessage = JSON.parse(event.data);
-    if (msg.type === "state") {
-      updateGameScreen(msg.match);
-    } else if (msg.type === "error") {
-      socket.close();
-      renderConnectScreen(msg.message);
-    } else if (msg.type === "webrtc-peer") {
-      opponentId = msg.peer_id;
-      isInitiator = msg.initiator;
-      trySetupWebRTC().catch(console.error);
-    } else if (msg.type === "webrtc-offer") {
-      handleRemoteOffer(msg.sdp).catch(console.error);
-    } else if (msg.type === "webrtc-answer") {
-      peerConnection?.setRemoteDescription(msg.sdp).catch(console.error);
-    } else if (msg.type === "webrtc-ice") {
-      handleRemoteIce(msg.candidate).catch(console.error);
-    }
-  });
-
-  socket.addEventListener("close", () => {
-    if (ws === socket) {
-      ws = null;
-      stopHolding();
-      shutdownCamera();
-      resetWebRTC();
-      renderConnectScreen("Disconnected from server");
-    }
-  });
-
-  socket.addEventListener("error", () => {
-    renderConnectScreen("Could not reach server");
-  });
-}
-
-function send(msg: ClientMessage) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(msg));
-  }
-}
-
-// ── hold-to-cast ─────────────────────────────────────────────────
-function startHolding(sign: string, btn?: HTMLButtonElement) {
-  stopHolding();
-  (btn ?? signButtons[sign])?.classList.add("holding");
-  send({ type: "sign", sign });
-  holdTimer = window.setInterval(() => send({ type: "sign", sign }), SEND_INTERVAL_MS);
-}
-
-function stopHolding() {
-  if (holdTimer !== null) {
-    window.clearInterval(holdTimer);
-    holdTimer = null;
-  }
-  document.querySelectorAll(".sign-btn.holding").forEach((el) => el.classList.remove("holding"));
-  send({ type: "sign", sign: "UNKNOWN" });
-}
-
-// ── game screen ──────────────────────────────────────────────────
-function renderGameScreen() {
+function renderWaiting() {
   app.innerHTML = `
     <h1>忍 JUTSUVERSE</h1>
+    <p class="lede">Share this code. The duel starts when the second player joins.</p>
+    <div class="card code-panel">
+      <div class="code">${escapeHtml(roomCode)}</div>
+      <button class="reset-btn" id="copy">Copy</button>
+    </div>
+    <div class="actions-row">
+      <button class="reset-btn" id="leave">Cancel</button>
+    </div>
+  `;
+  document.querySelector<HTMLButtonElement>("#copy")!.addEventListener("click", () => {
+    void navigator.clipboard.writeText(roomCode);
+  });
+  document.querySelector<HTMLButtonElement>("#leave")!.addEventListener("click", () => {
+    socket.send({ type: "leave" });
+    goLobby();
+  });
+}
+
+function renderEnded() {
+  const youWon = winner === seat;
+  const draw = winner === "draw";
+  const title = draw ? "DRAW" : youWon ? "YOU WIN!" : "YOU LOSE";
+  const kind = draw ? "" : youWon ? "win" : "lose";
+  app.innerHTML = `
+    <h1>忍 JUTSUVERSE</h1>
+    <div class="banner ${kind}">${title}</div>
+    <p class="lede">Room ${escapeHtml(roomCode || "—")}</p>
+    <button class="connect-btn" id="again">Back to lobby</button>
+  `;
+  document.querySelector<HTMLButtonElement>("#again")!.addEventListener("click", () => {
+    socket.send({ type: "leave" });
+    goLobby();
+  });
+}
+
+function renderGameScreen() {
+  bindKeys();
+  startKeepalive();
+  signButtons = {};
+
+  app.innerHTML = `
+    <h1>忍 JUTSUVERSE</h1>
+    <div class="status">Room <strong>${escapeHtml(roomCode)}</strong> · you are seat ${seat}</div>
     <div id="banner"></div>
+    <p class="hint" id="hints"></p>
     <div class="panels">
       <div class="panel" id="panel-me"></div>
       <div class="panel" id="panel-opp"></div>
@@ -150,45 +341,89 @@ function renderGameScreen() {
       <button class="cam-btn" id="cam-toggle">Enable camera</button>
     </div>
     <div class="signs" id="signs"></div>
-    <div class="log" id="log"></div>
     <div class="actions-row">
-      <button class="reset-btn" id="reset">Reset match</button>
+      <button class="reset-btn" id="leave">Leave</button>
     </div>
-    <div class="status">Connected as <strong>${myId}</strong> — hold a sign for ~1s to cast it</div>
+    <div class="status">Hold seals in sequence · keys A S W D F G</div>
   `;
 
-  signButtons = {};
+  const hints = document.querySelector<HTMLParagraphElement>("#hints")!;
+  hints.innerHTML = MOVE_HINTS.map(
+    (m) => `<span class="hint-move"><kbd>${m.seq}</kbd> ${m.name}</span>`,
+  ).join("");
+
   const signsEl = document.querySelector<HTMLDivElement>("#signs")!;
-  for (const def of SIGNS) {
+  for (const def of SIGN_DEFS) {
     const btn = document.createElement("button");
     btn.className = "sign-btn";
-    btn.dataset.kind = def.kind;
-    btn.textContent = def.label;
+    btn.textContent = `${def.label} (${def.key})`;
     btn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      startHolding(def.sign, btn);
+      if (!held.has(def.sign)) emit(def.sign, "down");
     });
-    btn.addEventListener("pointerup", stopHolding);
-    btn.addEventListener("pointerleave", stopHolding);
-    btn.addEventListener("pointercancel", stopHolding);
+    btn.addEventListener("pointerup", () => {
+      if (held.has(def.sign)) emit(def.sign, "up");
+    });
+    btn.addEventListener("pointerleave", () => {
+      if (held.has(def.sign)) emit(def.sign, "up");
+    });
+    btn.addEventListener("pointercancel", () => {
+      if (held.has(def.sign)) emit(def.sign, "up");
+    });
     signsEl.appendChild(btn);
     signButtons[def.sign] = btn;
   }
 
-  document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => {
-    send({ type: "reset" });
+  document.querySelector<HTMLButtonElement>("#leave")!.addEventListener("click", () => {
+    socket.send({ type: "leave" });
+    goLobby();
   });
-
   document.querySelector<HTMLButtonElement>("#cam-toggle")!.addEventListener("click", (e) => {
     toggleCamera(e.currentTarget as HTMLButtonElement);
   });
+
+  updateGameScreen();
+  trySetupWebRTC().catch(console.error);
 }
 
-// ── peer-to-peer video call ───────────────────────────────────────
+function panelHtml(label: string, name: string, p: FighterPublic) {
+  const hpPct = Math.max(0, (p.hp / MAX_HP) * 100);
+  const buffer = p.buffer.length ? p.buffer.join(" · ") : "—";
+  const move = p.moveId ? p.moveId : "—";
+  const guard = p.guardLeft > 0 ? ` · guard ${p.guardLeft}` : "";
+  return `
+    <h3><span>${label}</span><span>${escapeHtml(name)}</span></h3>
+    <div class="bar-label">HP ${p.hp}/${MAX_HP}</div>
+    <div class="bar"><div class="bar-fill hp" style="width:${hpPct}%"></div></div>
+    <div class="meta-line">Stance: ${p.stance}${guard}</div>
+    <div class="meta-line">Move: ${move}</div>
+    <div class="meta-line">Buffer: ${buffer}</div>
+  `;
+}
+
+function updateGameScreen() {
+  const me = seat === "a" ? a : b;
+  const opp = seat === "a" ? b : a;
+  const panelMe = document.querySelector<HTMLDivElement>("#panel-me");
+  const panelOpp = document.querySelector<HTMLDivElement>("#panel-opp");
+  if (!panelMe || !panelOpp) return;
+
+  panelMe.innerHTML = panelHtml("You", youName, me);
+  panelMe.classList.toggle("dead", me.hp <= 0);
+  panelOpp.innerHTML = panelHtml("Opponent", foeName, opp);
+  panelOpp.classList.toggle("dead", opp.hp <= 0);
+
+  const banner = document.querySelector<HTMLDivElement>("#banner");
+  if (banner) banner.innerHTML = "";
+}
+
 function createPeerConnection(): RTCPeerConnection {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   pc.onicecandidate = (e) => {
-    if (e.candidate) send({ type: "webrtc-ice", candidate: e.candidate.toJSON() });
+    if (e.candidate) {
+      const payload: SignalPayload = { kind: "ice", candidate: e.candidate.toJSON() };
+      socket.send({ type: "signal", payload });
+    }
   };
   pc.ontrack = (e) => {
     const remoteVideo = document.querySelector<HTMLVideoElement>("#remote-video");
@@ -201,15 +436,11 @@ function createPeerConnection(): RTCPeerConnection {
 async function flushPendingIce(pc: RTCPeerConnection) {
   const queued = pendingIce;
   pendingIce = [];
-  for (const candidate of queued) {
-    await pc.addIceCandidate(candidate);
-  }
+  for (const candidate of queued) await pc.addIceCandidate(candidate);
 }
 
-// called once we know the opponent's id AND our own camera is on —
-// whichever happens second triggers the handshake
 async function trySetupWebRTC() {
-  if (!localStream || opponentId === null || peerConnection) return;
+  if (!localStream || !peerPresent || peerConnection) return;
   const pc = createPeerConnection();
   localStream.getTracks().forEach((track) => pc.addTrack(track, localStream!));
 
@@ -220,18 +451,16 @@ async function trySetupWebRTC() {
     await flushPendingIce(pc);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    send({ type: "webrtc-answer", sdp: pc.localDescription! });
-  } else if (isInitiator) {
+    socket.send({ type: "signal", payload: { kind: "answer", sdp: pc.localDescription! } satisfies SignalPayload });
+  } else if (seat === "a") {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    send({ type: "webrtc-offer", sdp: pc.localDescription! });
+    socket.send({ type: "signal", payload: { kind: "offer", sdp: pc.localDescription! } satisfies SignalPayload });
   }
 }
 
 async function handleRemoteOffer(sdp: RTCSessionDescriptionInit) {
   if (!peerConnection) {
-    // opponent's camera came on before ours — remember the offer and
-    // answer it once we enable our own camera
     pendingOffer = sdp;
     return;
   }
@@ -239,7 +468,7 @@ async function handleRemoteOffer(sdp: RTCSessionDescriptionInit) {
   await flushPendingIce(peerConnection);
   const answer = await peerConnection.createAnswer();
   await peerConnection.setLocalDescription(answer);
-  send({ type: "webrtc-answer", sdp: peerConnection.localDescription! });
+  socket.send({ type: "signal", payload: { kind: "answer", sdp: peerConnection.localDescription! } satisfies SignalPayload });
 }
 
 async function handleRemoteIce(candidate: RTCIceCandidateInit) {
@@ -253,25 +482,25 @@ async function handleRemoteIce(candidate: RTCIceCandidateInit) {
 function resetWebRTC() {
   peerConnection?.close();
   peerConnection = null;
-  opponentId = null;
-  isInitiator = false;
   pendingOffer = null;
   pendingIce = [];
   const remoteVideo = document.querySelector<HTMLVideoElement>("#remote-video");
   if (remoteVideo) remoteVideo.srcObject = null;
 }
 
-// ── camera toggle + detection loop ──────────────────────────────
 function shutdownCamera() {
-  if (!cameraOn) return;
+  if (!cameraOn && !localStream) return;
   const video = document.querySelector<HTMLVideoElement>("#cam-video");
   const canvas = document.querySelector<HTMLCanvasElement>("#cam-canvas");
   if (cameraLoopId !== null) cancelAnimationFrame(cameraLoopId);
   cameraLoopId = null;
   if (video) stopCamera(video);
   canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  if (camHeld) emit(camHeld, "up");
   localStream = null;
-  activeCamSign = "UNKNOWN";
+  camHeld = null;
+  camCandidate = null;
+  camCandidateCount = 0;
   cameraOn = false;
 }
 
@@ -281,15 +510,8 @@ async function toggleCamera(toggleBtn: HTMLButtonElement) {
   if (!video || !canvas) return;
 
   if (cameraOn) {
-    if (cameraLoopId !== null) cancelAnimationFrame(cameraLoopId);
-    cameraLoopId = null;
-    stopCamera(video);
-    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
-    stopHolding();
+    shutdownCamera();
     resetWebRTC();
-    localStream = null;
-    activeCamSign = "UNKNOWN";
-    cameraOn = false;
     toggleBtn.textContent = "Enable camera";
     toggleBtn.classList.remove("active");
     return;
@@ -331,20 +553,24 @@ function runCameraLoop(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
           : "—";
       }
 
-      if (sign !== activeCamSign) {
-        activeCamSign = sign;
-        if (VALID_SIGNS.has(sign)) {
-          startHolding(sign);
-        } else {
-          stopHolding();
-        }
+      const next = PLAYABLE.has(sign) ? (sign as Sign) : null;
+      if (next === camCandidate) camCandidateCount += 1;
+      else {
+        camCandidate = next;
+        camCandidateCount = 1;
+      }
+
+      if (camCandidateCount >= HYSTERESIS && camCandidate !== camHeld) {
+        if (camHeld) emit(camHeld, "up");
+        if (camCandidate) emit(camCandidate, "down");
+        camHeld = camCandidate;
       }
     } catch (error) {
       console.error("Hand-sign inference failed", error);
       if (signLabel) signLabel.textContent = "Inference error";
-      if (activeCamSign !== "UNKNOWN") {
-        activeCamSign = "UNKNOWN";
-        stopHolding();
+      if (camHeld) {
+        emit(camHeld, "up");
+        camHeld = null;
       }
     }
 
@@ -354,42 +580,17 @@ function runCameraLoop(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
   cameraLoopId = requestAnimationFrame(() => void step());
 }
 
-function panelHtml(label: string, p: PlayerPublic) {
-  return `
-    <h3><span>${label}</span><span>${p.player_id}</span></h3>
-    <div class="bar-label">HP ${p.hp.toFixed(0)}</div>
-    <div class="bar"><div class="bar-fill hp" style="width:${Math.max(0, p.hp)}%"></div></div>
-    <div class="bar-label">Energy ${p.energy.toFixed(0)}</div>
-    <div class="bar"><div class="bar-fill energy" style="width:${Math.max(0, p.energy)}%"></div></div>
-    <div class="meta-line">Sign: ${p.current_sign}${p.active_effect ? ` · ${p.active_effect} armed` : ""}</div>
-    <div class="meta-line">Reflect x${p.reflect_uses_left} · Protect x${p.protect_uses_left}</div>
-  `;
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-function updateGameScreen(match: MatchPublic) {
-  const me = match.p1.player_id === myId ? match.p1 : match.p2;
-  const opp = match.p1.player_id === myId ? match.p2 : match.p1;
-
-  const panelMe = document.querySelector<HTMLDivElement>("#panel-me");
-  const panelOpp = document.querySelector<HTMLDivElement>("#panel-opp");
-  if (!panelMe || !panelOpp) return; // screen not mounted yet
-
-  panelMe.innerHTML = panelHtml("You", me);
-  panelMe.classList.toggle("dead", !me.alive);
-  panelOpp.innerHTML = panelHtml("Opponent", opp);
-  panelOpp.classList.toggle("dead", !opp.alive);
-
-  const banner = document.querySelector<HTMLDivElement>("#banner")!;
-  if (match.winner) {
-    const won = match.winner === myId;
-    banner.innerHTML = `<div class="banner ${won ? "win" : "lose"}">${won ? "YOU WIN!" : "YOU LOSE"}</div>`;
-  } else {
-    banner.innerHTML = "";
-  }
-
-  const log = document.querySelector<HTMLDivElement>("#log")!;
-  log.innerHTML = match.log.map((line) => `<div>${line}</div>`).join("");
-  log.scrollTop = log.scrollHeight;
+function escapeAttr(value: string) {
+  return escapeHtml(value);
 }
 
-renderConnectScreen();
+socket.connect((msg) => handleServer(msg));
+renderLobby();

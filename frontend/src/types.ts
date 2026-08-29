@@ -1,46 +1,44 @@
-export interface PlayerPublic {
-  player_id: string;
-  hp: number;
-  energy: number;
-  alive: boolean;
-  current_sign: string;
-  active_effect: "REFLECT" | "PROTECT" | null;
-  reflect_uses_left: number;
-  protect_uses_left: number;
-}
-
-export interface MatchPublic {
-  p1: PlayerPublic;
-  p2: PlayerPublic;
-  winner: string | null;
-  log: string[];
-}
-
-export type ServerMessage =
-  | { type: "state"; match: MatchPublic }
-  | { type: "error"; message: string }
-  | { type: "webrtc-peer"; peer_id: string; initiator: boolean }
-  | { type: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-ice"; candidate: RTCIceCandidateInit };
-
-export type ClientMessage =
-  | { type: "sign"; sign: string }
-  | { type: "reset" }
-  | { type: "webrtc-offer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-answer"; sdp: RTCSessionDescriptionInit }
-  | { type: "webrtc-ice"; candidate: RTCIceCandidateInit };
+import { SIGNS, type Sign } from "@jutsu/protocol";
 
 export interface SignDef {
-  sign: string;
+  sign: Sign;
   label: string;
-  kind: "ATTACK" | "REFLECT" | "PROTECT";
+  key: string;
 }
 
-export const SIGNS: SignDef[] = [
-  { sign: "TIGER", label: "Tiger → Fire", kind: "ATTACK" },
-  { sign: "SNAKE", label: "Snake → Water", kind: "ATTACK" },
-  { sign: "BIRD", label: "Bird → Wind", kind: "ATTACK" },
-  { sign: "RAM", label: "Ram → Reflect", kind: "REFLECT" },
-  { sign: "BOAR", label: "Boar → Protect", kind: "PROTECT" },
+export const SIGN_DEFS: SignDef[] = [
+  { sign: "TIGER", label: "Tiger", key: "A" },
+  { sign: "SNAKE", label: "Snake", key: "S" },
+  { sign: "RAM", label: "Ram", key: "W" },
+  { sign: "BOAR", label: "Boar", key: "D" },
+  { sign: "BIRD", label: "Bird", key: "F" },
+  { sign: "OX", label: "Ox", key: "G" },
 ];
+
+export const MOVE_HINTS = [
+  { seq: "TIGER SNAKE RAM", name: "tiger" },
+  { seq: "SNAKE RAM TIGER", name: "serpent" },
+  { seq: "RAM TIGER BOAR", name: "ox" },
+  { seq: "TIGER BOAR RAM", name: "boar" },
+  { seq: "BIRD OX TIGER", name: "crane" },
+  { seq: "OX BOAR BIRD", name: "hare" },
+  { seq: "BIRD TIGER OX", name: "dragon" },
+  { seq: "BOAR SNAKE", name: "guard" },
+];
+
+export const PLAYABLE = new Set<string>(SIGNS);
+
+export const KEY_MAP: Record<string, Sign> = {
+  a: "TIGER",
+  s: "SNAKE",
+  w: "RAM",
+  d: "BOAR",
+  f: "BIRD",
+  g: "OX",
+  A: "TIGER",
+  S: "SNAKE",
+  W: "RAM",
+  D: "BOAR",
+  F: "BIRD",
+  G: "OX",
+};

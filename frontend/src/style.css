@@ -19,7 +19,50 @@ body {
 
 #app {
   width: 100%;
-  max-width: 640px;
+  max-width: 720px;
+}
+
+.lede {
+  text-align: center;
+  color: #9aa4bb;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  margin: -0.6rem 0 1.2rem;
+}
+
+kbd {
+  display: inline-block;
+  background: #1e2534;
+  border: 1px solid #2c3346;
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.78rem;
+  font-family: "SF Mono", Menlo, monospace;
+}
+
+.hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+  margin: 0 0 1rem;
+}
+
+.hint-move {
+  font-size: 0.72rem;
+  color: #9aa4bb;
+}
+
+.code-panel {
+  text-align: center;
+}
+
+.code {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 2rem;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  margin-bottom: 0.8rem;
 }
 
 h1 {

@@ -1,102 +1,78 @@
 # JutsuVerse 忍
 
-JutsuVerse is a real-time, two-player hand-sign duel. Players cast actions with the on-screen controls or a webcam, while an authoritative FastAPI server manages rooms, combat, and state updates over WebSockets.
+JutsuVerse is a real-time, two-player hand-sign duel. Players cast **sign sequences** with on-screen pads, the keyboard, or a webcam. An authoritative Node server manages rooms, matching, and combat over WebSockets.
 
 ## Features
 
-- Two-player rooms with server-authoritative combat
+- Six-character room codes (create / join)
+- Server-authoritative sequence combat (same logic as the duel server)
 - Browser-based hand-sign recognition using a local YOLOX ONNX model
-- ONNX Runtime Web/WASM inference with no model CDN dependency
-- Peer-to-peer WebRTC camera video with signaling relayed by the server
-- On-screen controls when a webcam is unavailable
+- Peer-to-peer WebRTC camera video; signaling is relayed as opaque `signal` messages
+- Keyboard (`A S W D F G`) and on-screen pads when a webcam is unavailable
 
-The current game signs are:
+Moves are sequences, not held single seals:
 
-- `TIGER` — fire attack
-- `SNAKE` — water attack
-- `BIRD` — wind attack
-- `RAM` — reflect
-- `BOAR` — protect
-
-Fire beats Wind, Wind beats Water, and Water beats Fire. Hold a sign for about one second to cast it. Casting uses energy, which regenerates over time.
+- `TIGER SNAKE RAM` — tiger
+- `SNAKE RAM TIGER` — serpent
+- `RAM TIGER BOAR` — ox
+- `TIGER BOAR RAM` — boar
+- `BIRD OX TIGER` — crane
+- `OX BOAR BIRD` — hare
+- `BIRD TIGER OX` — dragon
+- `BOAR SNAKE` — guard (2s, incoming damage halved)
 
 ## Project structure
 
 ```text
-backend/
-  main.py                 FastAPI app, WebSocket rooms, and game loop
-  game/
-    engine.py             Combat engine
-    rules.py              Balance constants and sign mappings
-    state.py              Match and player state
-  player_client.py        Optional native OpenCV/MediaPipe client
-
+packages/protocol/        Shared WebSocket schema (Zod)
+server/                   Node game server (rooms, matcher, tick)
+  src/rooms.ts            6-char room codes, two seats
+  src/commands.ts         Sequence table
+  src/sim.ts              Stance / hits
+  src/hub.ts              join / ready / input / signal / leave
 frontend/
   public/models/
     yolox_nano.onnx       Local hand-sign recognition model
   src/
-    main.ts               UI, WebSocket client, and WebRTC video
-    handTracker.ts        ONNX webcam inference and detection rendering
-    types.ts              Client message and game-state types
-    style.css             Application styling
+    main.ts               UI, WebRTC, pads, camera
+    net/wsClient.ts       Same-origin WebSocket client
+    handTracker.ts        ONNX webcam inference
+backend/                  Legacy FastAPI client helper (not used at runtime)
 ```
 
 ## Run locally
 
-You need Python 3.10 or newer and a current Node.js installation.
+You need Node.js 20 or newer.
 
-### 1. Start the backend
-
-From the repository root in PowerShell:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install fastapi "uvicorn[standard]" websockets
-Set-Location backend
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-The backend is then available at:
-
-- Health check: `http://localhost:8000/`
-- Game socket: `ws://localhost:8000/ws/{room_id}/{player_id}`
-
-### 2. Start the frontend
-
-Open a second PowerShell terminal at the repository root:
-
-```powershell
-Set-Location frontend
+```bash
+cd /path/to/JutsuVerse
 npm install
 npm run dev
 ```
 
-Open the URL printed by Vite, normally `http://localhost:5173`.
+That starts both processes:
 
-### 3. Connect two players
+- Game server: `http://localhost:8080/health`
+- UI: `http://localhost:5173` (Vite proxies `/ws` to the game server)
 
-Open the frontend in two browser windows. In both windows, use `ws://localhost:8000` and the same room name, but enter a different player ID for each player. A room accepts up to two players.
+Open two browser windows to the Vite URL. In one, leave **Room code** blank and click **Create duel**. Share the 6-character code. In the other, enter that code and **Join duel**.
 
-Once connected, use the sign buttons or select **Enable camera**. Camera access requires browser permission. The ONNX model loads locally from `frontend/public/models/yolox_nano.onnx`.
+On another laptop, open `http://<this-machine-ip>:5173`. Do not type a server URL — the page's own host is the socket, and Vite forwards `/ws` to the game process.
+
+Camera access requires browser permission. The ONNX model loads from `frontend/public/models/yolox_nano.onnx`.
+
+```bash
+npm test
+npm run typecheck
+```
 
 ## Production frontend build
 
-```powershell
-Set-Location frontend
-npm run build
+```bash
+npm run build -w frontend
 ```
 
-The generated site is written to `frontend/dist/`.
-
-## Optional native webcam client
-
-`backend/player_client.py` provides an alternative OpenCV window instead of browser-based recognition. Install its extra dependencies and run it from `backend/`:
-
-```powershell
-python -m pip install opencv-python mediapipe websockets
-python player_client.py --server ws://localhost:8000 --room match1 --player p1
-```
+The generated site is written to `frontend/dist/`. The game server still needs to run on port 8080, or you need a reverse proxy that forwards `/ws`.
 
 ## Model attribution
 

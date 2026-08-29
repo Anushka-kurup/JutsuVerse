@@ -19,6 +19,7 @@ const HAND_SIGN_LABELS = [
 
 // Only these signs currently have an action in the game protocol.
 const GAME_SIGN_BY_CLASS_ID: Record<number, string> = {
+  1: "OX",
   2: "TIGER",
   5: "SNAKE",
   7: "RAM",
