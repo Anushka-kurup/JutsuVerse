@@ -35,11 +35,11 @@ export const PHASES = [
   /** a random meme gesture is shown; first player to perform it starts the match */
   "memegate",
   "live",
-  /** the 6-7 rep contest, triggered every SPECIAL_TRIGGER_ATTACKS casts */
+  /** the 6-7 rep contest — a one-time last stand opened by the first killing
+   * blow of the match; the race winner deals SPECIAL_DAMAGE to the loser */
   "special",
   /** a recurring meme-gesture race: combat freezes every MEME_RACE_TRIGGER_ATTACKS
-   * casts (yielding the slot to the 6-7 contest) — first to perform any trained
-   * gesture heals MEME_RACE_HEAL HP */
+   * casts — first to perform any trained gesture heals MEME_RACE_HEAL HP */
   "memerace",
   "ended",
 ] as const;
@@ -65,7 +65,8 @@ export const CLASH_WINDOW_TICKS = TICK_HZ;
 export const SHIELD_MAX_TICKS = TICK_HZ * 3;
 
 // ── 6-7 special contest ─────────────────────────────────────────────
-/** Combined casts by BOTH fighters that trigger the contest. Resets each time. */
+/** Retained for reference/tuning — no longer a trigger. The contest now opens
+ * as a one-time last stand on the first killing blow of the match. */
 export const SPECIAL_TRIGGER_ATTACKS = 10;
 /** Reps to win outright. One rep = one confirmed alternation (see lab/counter.ts). */
 export const SPECIAL_TARGET_REPS = 67;

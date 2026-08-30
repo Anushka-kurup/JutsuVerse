@@ -29,7 +29,7 @@ import {
 } from "@jutsu/protocol";
 import type { SkillElement } from "../../shared/skills.ts";
 import type { AttackCommand } from "./commands.ts";
-import { MEME_LABELS, memeImagePath, pickMemeLabel } from "./memeLabels.ts";
+import { memeImagePath, pickMemeLabel } from "./memeLabels.ts";
 import {
   applyEdge,
   applyHold,
@@ -98,12 +98,13 @@ export interface MatchSession {
   pendingInput: { a: PendingInput[]; b: PendingInput[] };
   pendingAttacks: { a: PendingAttack | null; b: PendingAttack | null };
   lastSeq: { a: number; b: number };
-  /** casts by BOTH fighters since the last 6-7 contest — at the trigger, it starts */
+  /** running count of casts by BOTH fighters (kept for reference / tuning) */
   attacks: number;
-  /** casts by BOTH fighters since the last meme race (or 6-7 contest, which
-   * resets this too so the race yields that slot) — at the trigger, a race starts */
+  /** casts by BOTH fighters since the last meme race — at the trigger, a race starts */
   castsSinceMemeRace: number;
   special: SpecialContest | null;
+  /** the one-time last-stand 6-7 contest has already fired this match */
+  specialTriggered: boolean;
   memeChallenge: MemeChallenge | null;
   cam: { a: boolean; b: boolean };
   ready: { a: boolean; b: boolean };
@@ -128,6 +129,7 @@ export function createMatch(): MatchSession {
     attacks: 0,
     castsSinceMemeRace: 0,
     special: null,
+    specialTriggered: false,
     memeChallenge: null,
     cam: { a: false, b: false },
     ready: { a: false, b: false },
@@ -231,29 +233,25 @@ export function receiveReps(m: MatchSession, seat: Seat, msg: RepsMsg): MatchSes
 }
 
 /**
- * A confirmed meme gesture. Applies during memegate (first to perform ANY
- * trained gesture starts the match and begins with MEME_GATE_BONUS_HP extra HP,
- * 35 vs 30) and during a memerace (first to perform ANY trained gesture heals
- * MEME_RACE_HEAL). Ignored otherwise, if the label isn't a trained gesture, if
- * the challenge has already resolved, or if this seat already reported one for
- * the current attempt. If a memegate's countdown expires first the match just
- * starts, both fighters on the usual MAX_HP (see tickMemeGate).
+ * A confirmed meme gesture. The client must perform the exact gesture the
+ * challenge is showing (`msg.label === mc.label`) — the client-side recognizer
+ * (frontend/src/gesture/MemeBridge.ts) is target-aware and only reports when
+ * that label's confidence clears the bar, so the shown meme image never changes
+ * out from under the players.
  *
- * Deliberately doesn't require matching the challenge's shown label: with this
- * dataset, per-label detection reliability varies a lot (some gestures classify
- * readily, others rarely clear the confidence bar client-side), so requiring
- * the ONE label that happened to be picked would make it effectively unwinnable
- * whenever that pick is a weak one. The label the client reports still has to
- * be a real trained gesture, though — the MemeMsg schema only constrains it to
- * a non-empty string, so this is the actual guard against an arbitrary/bogus
- * value winning instantly.
+ * During memegate the first correct performer starts the match and begins with
+ * MEME_GATE_BONUS_HP extra HP (35 vs 30); during a memerace the first correct
+ * performer heals MEME_RACE_HEAL. Ignored otherwise, if the label doesn't match
+ * the one shown, if the challenge has already resolved, or if this seat already
+ * reported one for the current attempt. If a memegate's countdown expires first
+ * the match just starts, both fighters on the usual MAX_HP (see tickMemeGate).
  */
 export function receiveMeme(m: MatchSession, seat: Seat, msg: MemeMsg): MatchSession {
   if (msg.seq <= m.lastSeq[seat]) return m;
   const lastSeq = { ...m.lastSeq, [seat]: msg.seq };
 
   const mc = m.memeChallenge;
-  if (!mc || mc.winner !== null || !MEME_LABELS.includes(msg.label) || mc.doneAtTick[seat] !== null) {
+  if (!mc || mc.winner !== null || msg.label !== mc.label || mc.doneAtTick[seat] !== null) {
     return { ...m, lastSeq };
   }
   const doneAtTick = { ...mc.doneAtTick, [seat]: m.tick };
@@ -272,9 +270,8 @@ export function receiveMeme(m: MatchSession, seat: Seat, msg: MemeMsg): MatchSes
     };
   }
   if (m.phase === "memerace") {
-    // show what actually won, not the original (now-irrelevant) suggestion
     return resolveMemeRace(
-      { ...m, lastSeq, memeChallenge: { ...mc, label: msg.label, doneAtTick } },
+      { ...m, lastSeq, memeChallenge: { ...mc, doneAtTick } },
       m.tick,
       seat,
     );
@@ -340,9 +337,18 @@ export function tickMatch(m: MatchSession): MatchSession {
     }
   }
 
+  // Wait for the triggering attack to actually land before freezing combat —
+  // entering with one in flight would silently swallow its damage.
+  const settled = !pendingAttacks.a && !pendingAttacks.b;
+  const lethal = fighters.a.hp <= 0 || fighters.b.hp <= 0;
+  // The first killing blow of the match opens the 6-7 contest instead of ending
+  // it — one last rep race where the winner deals SPECIAL_DAMAGE to the loser
+  // (see resolveSpecial). Fires once; a later killing blow just ends the match.
+  const lastStand = lethal && settled && !m.specialTriggered;
+
   let phase: Phase = "live";
   let winner: Seat | "draw" | null = null;
-  if (fighters.a.hp <= 0 || fighters.b.hp <= 0) {
+  if (lethal && !lastStand) {
     phase = "ended";
     winner = fighters.a.hp <= 0 && fighters.b.hp <= 0
       ? "draw"
@@ -363,14 +369,7 @@ export function tickMatch(m: MatchSession): MatchSession {
     pendingInput: { a: appliedA.rest, b: appliedB.rest },
   };
 
-  // Wait for the triggering attack to actually land before freezing combat —
-  // entering with one in flight would silently swallow its damage.
-  const settled = !pendingAttacks.a && !pendingAttacks.b;
-  // 6-7 wins a tie: it's checked first, and enterSpecial also resets
-  // castsSinceMemeRace so the meme race yields that cast slot.
-  if (phase === "live" && attacks >= SPECIAL_TRIGGER_ATTACKS && settled) {
-    return enterSpecial(next, tick);
-  }
+  if (lastStand) return enterSpecial(next, tick);
   if (phase === "live" && castsSinceMemeRace >= MEME_RACE_TRIGGER_ATTACKS && settled) {
     return enterMemeRace(next, tick);
   }
@@ -435,12 +434,14 @@ function decayMemeBanner(mc: MemeChallenge | null, tick: number): MemeChallenge 
   return tick - mc.resolvedAtTick >= MEME_BANNER_TICKS ? null : mc;
 }
 
-/** Freeze combat and open the contest. Seals in progress are dropped, HP is kept.
- * Also resets castsSinceMemeRace so the meme race yields this cast slot to 6-7. */
+/** Freeze combat and open the last-stand 6-7 contest on the first killing blow.
+ * Seals in progress are dropped; HP is kept (the near-dead fighter is still at
+ * ≤0 — the contest winner deals SPECIAL_DAMAGE to the loser, see resolveSpecial). */
 function enterSpecial(m: MatchSession, tick: number): MatchSession {
   return {
     ...m,
     phase: "special",
+    specialTriggered: true,
     attacks: 0,
     castsSinceMemeRace: 0,
     pendingInput: { a: [], b: [] },

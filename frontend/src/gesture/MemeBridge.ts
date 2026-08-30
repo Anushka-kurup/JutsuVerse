@@ -57,13 +57,10 @@ const EMPTY_DEBUG: MemeDebug = { tracked: false, windowMs: 0, latched: false, to
  * (see its own docstring): classify the growing clip continuously, reset the
  * window after a brief signal gap, and report a recognition once per attempt.
  *
- * Doesn't gate on a specific target label: per-label detection reliability
- * varies a lot on this dataset (some gestures classify readily, others
- * rarely clear the bar), so requiring the ONE label the challenge happened
- * to show would make it effectively unwinnable whenever that label is a weak
- * one. Instead this reports WHATEVER label wins the very first frame that
- * clears MEME_MIN_CONFIDENCE — the server just needs to know a valid trained
- * gesture was performed, not which one, and awards it to whoever reports first.
+ * Target-aware: it only reports when the CURRENT challenge label's own
+ * confidence clears MEME_MIN_CONFIDENCE (not when that label happens to be the
+ * argmax). So a player wins by performing the gesture that's actually shown,
+ * and the challenge never reports — or awards — a different meme.
  */
 export class MemeBridge {
   private raf = 0;
@@ -75,6 +72,8 @@ export class MemeBridge {
   private latched = false;
   private forest: MemeForest | null = null;
   private lastDebug: MemeDebug = EMPTY_DEBUG;
+  /** the label the challenge is currently asking for; null between challenges */
+  private target: string | null = null;
 
   constructor(private readonly video: HTMLVideoElement) {}
 
@@ -93,6 +92,14 @@ export class MemeBridge {
     this.latched = false;
     this.window = [];
     this.lastDebug = EMPTY_DEBUG;
+  }
+
+  /** Set the gesture the challenge is asking for (null between challenges).
+   * Changing it starts a fresh attempt. */
+  setTarget(label: string | null): void {
+    if (label === this.target) return;
+    this.target = label;
+    this.reset();
   }
 
   /** Fetch the models ahead of time — the gate/race starts with no warning. */
@@ -156,6 +163,7 @@ export class MemeBridge {
     // recomputed every tick regardless of the gates below, so the D-key debug
     // overlay shows live confidence even before MIN_ATTEMPT_MS or after latch
     let top: MemeDebugEntry[] = [];
+    let targetConf = 0;
     if (this.window.length && this.forest) {
       const row = clipToRow(this.window.map((p) => p.feats), KEYFRAMES);
       const proba = this.forest.predictProba(row);
@@ -163,6 +171,10 @@ export class MemeBridge {
         .map((label, i) => ({ label, confidence: proba[i] }))
         .sort((a, b) => b.confidence - a.confidence)
         .slice(0, 5);
+      if (this.target) {
+        const ti = this.forest.labels.indexOf(this.target);
+        targetConf = ti >= 0 ? proba[ti] : 0;
+      }
     }
     this.lastDebug = {
       tracked,
@@ -171,13 +183,14 @@ export class MemeBridge {
       top,
     };
 
-    if (!this.window.length || !this.forest || this.latched) return;
+    if (!this.window.length || !this.forest || this.latched || !this.target) return;
     if (now - this.window[0].t < MIN_ATTEMPT_MS) return; // give them a moment to get into it
 
-    const best = top[0];
-    if (best && best.confidence >= MEME_MIN_CONFIDENCE) {
+    // win by performing the gesture that's actually shown — report only when
+    // THAT label clears the bar, never a different one the model liked more
+    if (targetConf >= MEME_MIN_CONFIDENCE) {
       this.latched = true;
-      bus.emit(Events.MEME_RECOGNIZED, { label: best.label });
+      bus.emit(Events.MEME_RECOGNIZED, { label: this.target });
     }
   };
 }

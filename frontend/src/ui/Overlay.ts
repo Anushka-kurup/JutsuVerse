@@ -81,7 +81,7 @@ class OverlayController {
         <div id="contest" hidden>
           <p class="contest-title">六七 · 6-7 CONTEST</p>
           <p class="contest-hint">
-            Alternate your hands high and low. First to <b>67</b> deals <b>10 damage</b>.
+            Last stand! Alternate your hands high and low. First to <b>67</b> deals <b>10 damage</b> — lose and the match is over.
           </p>
           <div class="contest-scores">
             ${this.contestSideHtml("me", "YOU")}

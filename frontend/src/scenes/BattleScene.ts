@@ -17,7 +17,7 @@ import { StateSync, type NetState } from "../network/StateSync";
 import { VideoCall } from "../network/VideoCall";
 import type { MemeChallengeView, SpecialView } from "../network/NetworkClient";
 import { Overlay } from "../ui/Overlay";
-import { type Phase, type Seat, type Side } from "../types";
+import { skillById, type Phase, type Seat, type Side } from "../types";
 
 /**
  * Assembles the battle. The server owns the game now:
@@ -49,6 +49,9 @@ export class BattleScene extends Phaser.Scene {
   private inMemeChallenge = false;
   private currentMemeLabel: string | null = null;
 
+  /** dev overlay (D): the detect-debug readout + the manual skill-test buttons */
+  private devVisible = false;
+
   /** false until the match is actually live — gates all input */
   private started = false;
   /** camera enabled locally (gate 1) */
@@ -67,6 +70,7 @@ export class BattleScene extends Phaser.Scene {
     this.inSpecial = false;
     this.inMemeChallenge = false;
     this.currentMemeLabel = null;
+    this.devVisible = false;
     new BackgroundLayer(this);
 
     this.preview = new CameraPreview(Overlay.cameraRoot, () => this.toggleCamera());
@@ -93,7 +97,7 @@ export class BattleScene extends Phaser.Scene {
     Overlay.showPrep();
     Overlay.setPrepStatus("Enable your camera to ready up");
 
-    this.input.keyboard?.on("keydown-D", this.toggleDebug, this);
+    this.input.keyboard?.on("keydown-D", this.toggleDev, this);
     this.input.keyboard?.on("keydown-G", this.toggleGuide, this);
     this.input.keyboard?.on("keydown-M", this.toggleMusic, this);
 
@@ -122,8 +126,20 @@ export class BattleScene extends Phaser.Scene {
     if (Overlay.debugVisible) Overlay.setDebug(this.debugText());
   }
 
-  private toggleDebug(): void {
-    Overlay.setDebug(Overlay.debugVisible ? null : this.debugText());
+  /** D — dev mode: toggle the detect-debug readout and the manual skill-test
+   * buttons together. Both start hidden. */
+  private toggleDev(): void {
+    this.devVisible = !this.devVisible;
+    Overlay.setDebug(this.devVisible ? this.debugText() : null);
+    if (this.devVisible) {
+      Overlay.showSkillTest((skillId) => {
+        if (!this.started) return;
+        const sk = skillById(skillId);
+        if (sk) for (const seal of sk.seals) net.sendSeal(seal);
+      });
+    } else {
+      Overlay.hideSkillTest();
+    }
   }
   private toggleGuide(): void {
     Overlay.toggleSealGuide();
@@ -262,11 +278,11 @@ export class BattleScene extends Phaser.Scene {
       });
     }
 
-    // the shown label is just a suggestion now (see MemeBridge) — a change
-    // still means "fresh attempt", so reset in-progress recognition state
+    // point the recognizer at the gesture that's shown — a change is a fresh
+    // attempt (setTarget resets in-progress recognition state)
     if (view.label !== this.currentMemeLabel) {
       this.currentMemeLabel = view.label;
-      this.memeBridge.reset();
+      this.memeBridge.setTarget(view.label);
     }
   }
 
@@ -274,6 +290,7 @@ export class BattleScene extends Phaser.Scene {
     if (!this.inMemeChallenge) return;
     this.inMemeChallenge = false;
     this.currentMemeLabel = null;
+    this.memeBridge.setTarget(null);
     this.memeBridge.stop();
     this.bridge.resumeDetection();
     Overlay.setMemeChallengeMode(false);
@@ -393,7 +410,7 @@ export class BattleScene extends Phaser.Scene {
     bus.off(Events.NET_MATCH, this.onNetMatch, this);
     bus.off(Events.NET_ERROR, this.onNetError, this);
     bus.off(Events.NET_CLOSE, this.onNetClose, this);
-    this.input.keyboard?.off("keydown-D", this.toggleDebug, this);
+    this.input.keyboard?.off("keydown-D", this.toggleDev, this);
     this.input.keyboard?.off("keydown-G", this.toggleGuide, this);
     this.input.keyboard?.off("keydown-M", this.toggleMusic, this);
 

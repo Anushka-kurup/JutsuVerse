@@ -11,7 +11,6 @@ import {
   SHIELD_MAX_TICKS,
   SPECIAL_DAMAGE,
   SPECIAL_TARGET_REPS,
-  SPECIAL_TRIGGER_ATTACKS,
   type Seat,
 } from "@jutsu/protocol";
 import { ATTACKS, attackById, SHIELD } from "./commands.ts";
@@ -328,12 +327,15 @@ test("performing the memegate's label starts the match immediately, with bonus H
   assert.equal(next.fighters.b.hp, MAX_HP, "the other player starts at the usual 30");
 });
 
-test("memegate accepts any pooled gesture, not just the one shown", () => {
+test("memegate requires the exact gesture that's shown", () => {
   const m = memeGateMatch({ label: "dab" });
   const other = MEME_LABELS.find((l) => l !== "dab")!;
-  const next = receiveMeme(m, "a", memeMsg(1, other));
-  assert.equal(next.phase, "live", "any pooled gesture still resolves the gate");
-  assert.equal(next.fighters.a.hp, MAX_HP + MEME_GATE_BONUS_HP);
+  const wrong = receiveMeme(m, "a", memeMsg(1, other));
+  assert.equal(wrong.phase, "memegate", "a different gesture does not resolve the gate");
+
+  const right = receiveMeme(m, "a", memeMsg(1, "dab"));
+  assert.equal(right.phase, "live");
+  assert.equal(right.fighters.a.hp, MAX_HP + MEME_GATE_BONUS_HP);
 });
 
 test("the meme pool is limited to labels that have a meme image", () => {
@@ -343,7 +345,7 @@ test("the meme pool is limited to labels that have a meme image", () => {
   assert.ok(MEME_LABELS.length > 0);
 });
 
-test("memegate ignores a label that isn't a real trained gesture", () => {
+test("memegate ignores a label that isn't the one shown", () => {
   const m = memeGateMatch({ label: "dab" });
   const next = receiveMeme(m, "a", memeMsg(1, "not_a_real_gesture"));
   assert.equal(next.phase, "memegate");
@@ -378,29 +380,27 @@ test("rematch resets only after both players are ready", () => {
   assert.equal(m.fighters.a.shields, MAX_SHIELDS);
 });
 
-// ── 6-7 special contest ─────────────────────────────────────────────
+// ── 6-7 last-stand contest (opens on the first killing blow) ─────────
 
-test("the trigger count of combined casts opens the contest, once the last attack has landed", () => {
+test("a killing blow opens the last-stand contest instead of ending the match", () => {
   let m = liveMatch();
-  m.attacks = SPECIAL_TRIGGER_ATTACKS - 1;
-  seedCast(m, "a", "fire_2");
+  m.fighters.b = { ...m.fighters.b, hp: 3 };
+  seedCast(m, "a", "fire_2"); // 5 damage — lethal
 
   m = tickMatch(m);
-  assert.equal(m.attacks, SPECIAL_TRIGGER_ATTACKS);
-  // still live: the triggering attack is in flight and must be allowed to land
-  assert.equal(m.phase, "live");
+  assert.equal(m.phase, "live", "the triggering attack is still in flight");
   assert.notEqual(m.pendingAttacks.a, null);
 
   for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
   assert.equal(m.phase, "special");
-  assert.equal(m.fighters.b.hp, MAX_HP - 5, "the triggering attack still deals its damage");
+  assert.equal(m.specialTriggered, true);
+  assert.ok(m.fighters.b.hp <= 0, "b is still down — only winning the race saves them");
   assert.deepEqual(m.special?.reps, { a: 0, b: 0 });
-  assert.equal(m.attacks, 0, "the counter re-arms for the next contest");
 });
 
-test("a lethal triggering attack ends the match instead of opening the contest", () => {
+test("a second killing blow ends the match — the last stand fires only once", () => {
   let m = liveMatch();
-  m.attacks = SPECIAL_TRIGGER_ATTACKS - 1;
+  m.specialTriggered = true; // already used this match
   m.fighters.b = { ...m.fighters.b, hp: 2 };
   seedCast(m, "a", "fire_2");
 
@@ -409,11 +409,11 @@ test("a lethal triggering attack ends the match instead of opening the contest",
   assert.equal(m.winner, "a");
 });
 
-test("entering the contest drops seals in progress but keeps HP and shields", () => {
+test("opening the contest drops seals in progress but keeps HP and shields", () => {
   let m = liveMatch();
-  m.attacks = SPECIAL_TRIGGER_ATTACKS;
-  m.fighters.b = {
-    ...m.fighters.b,
+  m.fighters.b = { ...m.fighters.b, hp: 0 }; // already down → next tick opens the last stand
+  m.fighters.a = {
+    ...m.fighters.a,
     hp: 12,
     shields: 1,
     buffer: [{ sign: "rat", tick: 0 }],
@@ -421,10 +421,56 @@ test("entering the contest drops seals in progress but keeps HP and shields", ()
   };
   m = tickMatch(m);
   assert.equal(m.phase, "special");
-  assert.equal(m.fighters.b.hp, 12);
-  assert.equal(m.fighters.b.shields, 1);
-  assert.deepEqual(m.fighters.b.buffer, []);
-  assert.equal(m.fighters.b.currentHold, null);
+  assert.equal(m.fighters.a.hp, 12);
+  assert.equal(m.fighters.a.shields, 1);
+  assert.deepEqual(m.fighters.a.buffer, []);
+  assert.equal(m.fighters.a.currentHold, null);
+});
+
+test("winning the last stand still loses if you were the one who got downed", () => {
+  let m = liveMatch();
+  m.fighters.a = { ...m.fighters.a, hp: 2 };
+  m.fighters.b = { ...m.fighters.b, hp: 25 };
+  seedCast(m, "b", "fire_2"); // downs a → last stand
+
+  for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "special");
+  assert.ok(m.fighters.a.hp <= 0);
+
+  m.special = { ...m.special!, reps: { a: SPECIAL_TARGET_REPS, b: 3 } }; // a wins the race
+  for (let i = 0; i < 80 && m.phase !== "ended"; i++) m = tickMatch(m);
+  assert.equal(m.fighters.b.hp, 25 - SPECIAL_DAMAGE, "a's win still lands 10 on b");
+  assert.equal(m.phase, "ended");
+  assert.equal(m.winner, "b", "but a was already down, so a still loses");
+});
+
+test("winning the last stand takes the match if the 10 damage downs the opponent too", () => {
+  let m = liveMatch();
+  m.fighters.a = { ...m.fighters.a, hp: 2 };
+  m.fighters.b = { ...m.fighters.b, hp: 8 }; // <= SPECIAL_DAMAGE
+  seedCast(m, "b", "fire_2"); // downs a → last stand
+
+  for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "special");
+
+  m.special = { ...m.special!, reps: { a: SPECIAL_TARGET_REPS, b: 3 } }; // a wins the race
+  m = tickMatch(m);
+  assert.equal(m.phase, "ended");
+  assert.equal(m.winner, "a", "a's 10 damage downed b, and the contest winner takes it");
+});
+
+test("losing the last-stand contest ends the match", () => {
+  let m = liveMatch();
+  m.fighters.a = { ...m.fighters.a, hp: 2 };
+  seedCast(m, "b", "fire_2");
+
+  for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "special");
+
+  m.special = { ...m.special!, reps: { a: 3, b: SPECIAL_TARGET_REPS } }; // b wins the race
+  for (let i = 0; i < 80 && m.phase !== "ended"; i++) m = tickMatch(m);
+  assert.equal(m.phase, "ended");
+  assert.equal(m.winner, "b", "a stayed down");
 });
 
 test("first to the target damages the loser and combat resumes", () => {
@@ -503,16 +549,17 @@ test("the contest result rides along briefly, then clears", () => {
   assert.equal(m.phase, "live");
 });
 
-test("the contest re-arms every trigger-count casts rather than firing once", () => {
+test("the last-stand contest never re-opens once it has fired", () => {
   let m = contestMatch({ a: SPECIAL_TARGET_REPS, b: 0 });
-  m = tickMatch(m);
+  m.specialTriggered = true; // it opened earlier this match
+  m.fighters.a = { ...m.fighters.a, hp: 20 };
+  m = tickMatch(m); // resolves the contest → live
   assert.equal(m.phase, "live");
 
-  m.attacks = SPECIAL_TRIGGER_ATTACKS;
+  m.fighters.b = { ...m.fighters.b, hp: 0 }; // another killing blow
   m = tickMatch(m);
-  assert.equal(m.phase, "special", "a second contest opens after another trigger-count casts");
-  assert.deepEqual(m.special?.reps, { a: 0, b: 0 });
-  assert.equal(m.special?.winner, null);
+  assert.equal(m.phase, "ended", "no second contest — the match just ends");
+  assert.equal(m.winner, "a");
 });
 
 // ── recurring meme race (every MEME_RACE_TRIGGER_ATTACKS casts) ───────
@@ -543,17 +590,6 @@ test("the meme race re-arms — another opens MEME_RACE_TRIGGER_ATTACKS casts la
   assert.equal(m.memeChallenge?.winner, null);
 });
 
-test("the meme race yields its cast slot to the 6-7 contest", () => {
-  let m = liveMatch();
-  m.attacks = SPECIAL_TRIGGER_ATTACKS - 1; // next cast is the 10th → 6-7's slot
-  m.castsSinceMemeRace = MEME_RACE_TRIGGER_ATTACKS - 1; // ...which is also a race trigger
-  seedCast(m, "a", "fire_2");
-
-  for (let i = 0; i < 40 && m.phase === "live"; i++) m = tickMatch(m);
-  assert.equal(m.phase, "special", "6-7 takes the slot, not the meme race");
-  assert.equal(m.castsSinceMemeRace, 0, "the race counter reset, so its next fire is a full 5 casts out");
-});
-
 test("performing the meme race's label heals the first to do it by MEME_RACE_HEAL", () => {
   const m = memeRaceMatch({ label: "dab" });
   m.fighters.a = { ...m.fighters.a, hp: 25 };
@@ -579,16 +615,21 @@ test("the meme-race heal is capped at full health", () => {
   assert.equal(next.memeChallenge?.healed, 0);
 });
 
-test("the meme race accepts any trained gesture and shows what actually won", () => {
+test("the meme race requires the exact gesture shown, and the banner keeps that label", () => {
   const m = memeRaceMatch({ label: "dab" });
   m.fighters.a = { ...m.fighters.a, hp: 10 };
-  const next = receiveMeme(m, "a", memeMsg(1, "korean_heart"));
-  assert.equal(next.memeChallenge?.winner, "a", "korean_heart is a real trained gesture");
-  assert.equal(next.fighters.a.hp, 10 + MEME_RACE_HEAL);
-  assert.equal(next.memeChallenge?.label, "korean_heart", "the banner shows what was performed");
+
+  const wrong = receiveMeme(m, "a", memeMsg(1, "korean_heart"));
+  assert.equal(wrong.memeChallenge?.winner, null, "a different gesture does not win");
+  assert.equal(wrong.fighters.a.hp, 10);
+
+  const right = receiveMeme(m, "a", memeMsg(1, "dab"));
+  assert.equal(right.memeChallenge?.winner, "a");
+  assert.equal(right.fighters.a.hp, 10 + MEME_RACE_HEAL);
+  assert.equal(right.memeChallenge?.label, "dab", "the banner still shows the gesture that was set");
 });
 
-test("the meme race ignores a label that isn't a real trained gesture", () => {
+test("the meme race ignores a label that isn't the one shown", () => {
   const m = memeRaceMatch({ label: "dab" });
   const next = receiveMeme(m, "a", memeMsg(1, "not_a_real_gesture"));
   assert.equal(next.memeChallenge?.winner, null);
