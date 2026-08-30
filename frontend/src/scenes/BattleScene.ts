@@ -9,7 +9,7 @@ import { GestureBridge } from "../gesture/GestureBridge";
 import { CameraPreview } from "../gesture/CameraPreview";
 import { SkillMatcher } from "../gesture/SkillMatcher";
 import { SixSevenBridge, type SixSevenSignal } from "../gesture/SixSevenBridge";
-import { MemeBridge } from "../gesture/MemeBridge";
+import { MemeBridge, MEME_MIN_CONFIDENCE } from "../gesture/MemeBridge";
 import { Hud } from "../hud/Hud";
 import { EffectsLayer } from "../layers/EffectsLayer";
 import { BackgroundLayer } from "../layers/BackgroundLayer";
@@ -159,8 +159,28 @@ export class BattleScene extends Phaser.Scene {
       `top classes (threshold ignored):`,
       top || "  (nothing over 1%)",
       ``,
+      ...this.memeDebugLines(),
       `hold Tiger 寅 steady → expect [2] tiger to lead.  D = hide`,
     ].join("\n");
+  }
+
+  /** Live meme-classifier readout for the D overlay — see MemeBridge.debug. */
+  private memeDebugLines(): string[] {
+    const m = this.memeBridge.debug;
+    const pct = (c: number) => `${(c * 100).toFixed(0)}%`.padStart(4);
+    const bar = (c: number) => "█".repeat(Math.round(c * 20)).padEnd(20, "·");
+    const targetLeads = m.top[0]?.label === m.target;
+    const passes = targetLeads || m.targetConf >= MEME_MIN_CONFIDENCE;
+    const rows = m.top
+      .map((e) => `  ${e.label === m.target ? "▶" : " "} ${e.label.padEnd(15)} ${pct(e.confidence)}`)
+      .join("\n");
+    return [
+      `── MEME  ${this.memeBridge.active ? "running" : "idle"}   ${m.tracked ? "arms/hands OK" : "NO ARMS/HANDS IN FRAME"}   window ${Math.round(m.windowMs)}ms${m.latched ? "   LATCHED" : ""}`,
+      `target : ${m.target ?? "(no challenge)"}   ${pct(m.targetConf)}  ${bar(m.targetConf)}   ${targetLeads ? "TOP-1" : `#${(m.top.findIndex((e) => e.label === m.target) + 1) || "?"}`}`,
+      `pass if: target is top-1  or  conf ≥ ${pct(MEME_MIN_CONFIDENCE)}   →  ${passes ? "PASS" : "…"}`,
+      rows || "  (no window yet)",
+      ``,
+    ];
   }
 
   // ── gesture ──

@@ -3,11 +3,22 @@ import { defineConfig } from "vite";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const protocolSrc = fileURLToPath(new URL("../packages/protocol/src/index.ts", import.meta.url));
+const entry = (name: string) => fileURLToPath(new URL(`./${name}`, import.meta.url));
 
 export default defineConfig({
   resolve: {
     // import the protocol package straight from its .ts source so Vite transforms it
     alias: { "@jutsu/protocol": protocolSrc },
+  },
+  // the app plus the standalone detection labs (served at /sixseven.html, /meme.html)
+  build: {
+    rollupOptions: {
+      input: {
+        main: entry("index.html"),
+        sixseven: entry("sixseven.html"),
+        meme: entry("meme.html"),
+      },
+    },
   },
   server: {
     host: true,

@@ -20,8 +20,8 @@ export interface SpecialView {
   secondsLeft: number;
   /** null while the contest is running */
   outcome: "me" | "opp" | "draw" | null;
-  /** HP knocked off the loser — 0 on a draw, short of the full hit if it downed them */
-  damage: number;
+  /** HP restored to the winner — 0 on a draw or if they were already full */
+  healed: number;
 }
 
 /** A meme-gesture challenge (memegate or memerace) from the local player's point of view. */
@@ -184,7 +184,7 @@ export class NetworkClient {
             : sp.winner === this.seat
               ? "me"
               : "opp",
-      damage: sp.damage,
+      healed: sp.healed,
     };
   }
 

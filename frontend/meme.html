@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meme Game Lab</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 14px/1.5 system-ui, sans-serif;
+        background: #14100a;
+        color: #e8e2d6;
+      }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 1.4rem; }
+      h1 { margin: 0 0 0.2rem; font-size: 1.3rem; }
+      .sub { color: #9a9182; font-size: 0.85rem; }
+      .cols { display: grid; grid-template-columns: 480px 1fr; gap: 1.4rem; margin-top: 1.2rem; }
+      @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+      .stage { position: relative; border-radius: 12px; overflow: hidden; background: #000; }
+      #video { display: block; width: 100%; height: auto; }
+      #flash {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        font: 800 2rem/1 Impact, system-ui, sans-serif; letter-spacing: 0.04em;
+        color: #4ade80; background: rgba(20, 14, 6, 0.55);
+        opacity: 0; transition: opacity 0.12s; pointer-events: none;
+      }
+      #flash.show { opacity: 1; }
+
+      .controls { display: flex; gap: 0.6rem; margin-top: 0.8rem; }
+      button {
+        font: inherit; padding: 0.45rem 0.9rem; border-radius: 8px;
+        border: 1px solid #d69b4b; background: #2a1f10; color: #ffcf8a; cursor: pointer;
+      }
+      button.primary { background: #d69b4b; color: #1a1206; font-weight: 700; }
+      button:disabled { opacity: 0.4; cursor: default; }
+
+      .picker {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+        gap: 0.5rem;
+      }
+      .pick {
+        display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+        padding: 0.35rem; border-radius: 10px; border: 2px solid transparent;
+        background: #1e1810; color: #cbc3b4;
+      }
+      .pick img { width: 100%; height: 68px; object-fit: contain; border-radius: 6px; background: #000; }
+      .pick .noimg {
+        width: 100%; height: 68px; display: flex; align-items: center; justify-content: center;
+        border-radius: 6px; background: #000; color: #6b6355; font-size: 0.7rem;
+      }
+      .pick span:last-child { font-size: 0.68rem; letter-spacing: 0.02em; }
+      .pick.on { border-color: #7ee0ff; background: #12283040; }
+
+      #readout {
+        margin-top: 1rem; padding: 0.9rem 1rem; border-radius: 10px;
+        background: #0d0a05; border: 1px solid #2a2016;
+        font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace;
+        white-space: pre; overflow-x: auto; color: #b9d8c6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Meme Game Lab</h1>
+        <span class="sub"
+          >Pick a meme as the target, then perform it on camera — this runs the
+          exact <code>MemeBridge</code> recognizer the game uses.</span
+        >
+      </header>
+
+      <div class="cols">
+        <div>
+          <div class="stage">
+            <video id="video" playsinline muted></video>
+            <div id="flash"></div>
+          </div>
+          <div class="controls">
+            <button class="primary" id="start">Start camera</button>
+            <button id="stop" disabled>Stop</button>
+            <button id="retry" disabled>Retry (un-latch)</button>
+          </div>
+          <pre id="readout">press “Start camera”, then pick a target above the video…</pre>
+        </div>
+
+        <div>
+          <h2 style="margin: 0 0 0.5rem; font-size: 1rem">Target</h2>
+          <div class="picker" id="picker"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/lab/meme.ts"></script>
+  </body>
+</html>

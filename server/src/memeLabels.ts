@@ -14,9 +14,16 @@ const IMG_DIR = resolve(MEMES_DIR, "img");
 // files under frontend/public/ are served at "<BASE_URL>memes/img/<file>"
 const IMG_WEB_PREFIX = "memes/img/";
 
-// six_seven has its own dedicated rep-counting contest (the "special" phase) —
-// it isn't a pick-and-perform-once gesture, so it's never in the meme pool.
-const EXCLUDED_FROM_CHALLENGES = new Set(["six_seven"]);
+// Labels kept out of the challenge pool even though their image is present:
+//   - six_seven has its own dedicated rep-counting contest (the "special" phase)
+//   - drake_no / drake_yes / thinking_monkey classify too unreliably to be fair
+// (drop a label from here to bring it back — the image is still shipped).
+const EXCLUDED_FROM_CHALLENGES = new Set([
+  "six_seven",
+  "drake_no",
+  "drake_yes",
+  "thinking_monkey",
+]);
 
 /** label → image filename, from whatever's actually in memes/img/. */
 const MEME_IMAGE_FILES: Map<string, string> = (() => {

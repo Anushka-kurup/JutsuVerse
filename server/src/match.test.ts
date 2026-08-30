@@ -338,10 +338,16 @@ test("memegate requires the exact gesture that's shown", () => {
   assert.equal(right.fighters.a.hp, MAX_HP + MEME_GATE_BONUS_HP);
 });
 
-test("the meme pool is limited to labels that have a meme image", () => {
-  // mog / scheming_hand / scuba_ok are trained but have no image in memes/img/
-  assert.ok(!MEME_LABELS.includes("mog"), "mog has no image, so it's out of the pool");
-  assert.ok(MEME_LABELS.includes("dab"), "dab has an image");
+test("the meme pool is only image-backed, non-excluded labels", () => {
+  // scheming_hand / scuba_ok are trained but have no image in memes/img/
+  assert.ok(!MEME_LABELS.includes("scheming_hand"), "scheming_hand has no image, so it's out of the pool");
+  // these have images but are benched via EXCLUDED_FROM_CHALLENGES
+  assert.ok(!MEME_LABELS.includes("drake_no"), "drake_no is explicitly excluded");
+  assert.ok(!MEME_LABELS.includes("drake_yes"), "drake_yes is explicitly excluded");
+  assert.ok(!MEME_LABELS.includes("thinking_monkey"), "thinking_monkey is explicitly excluded");
+  assert.ok(!MEME_LABELS.includes("six_seven"), "six_seven has its own contest");
+  assert.ok(MEME_LABELS.includes("dab"), "dab has an image and isn't excluded");
+  assert.ok(MEME_LABELS.includes("mog"), "mog has an image and isn't excluded");
   assert.ok(MEME_LABELS.length > 0);
 });
 

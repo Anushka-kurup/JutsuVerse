@@ -81,7 +81,7 @@ class OverlayController {
         <div id="contest" hidden>
           <p class="contest-title">六七 · 6-7 CONTEST</p>
           <p class="contest-hint">
-            Last stand! Alternate your hands high and low. First to <b>67</b> deals <b>10 damage</b> — lose and the match is over.
+            Last stand! Alternate your hands high and low. First to <b>67</b> survives with <b>+10 HP</b> — lose and the match is over.
           </p>
           <div class="contest-scores">
             ${this.contestSideHtml("me", "YOU")}
@@ -645,9 +645,9 @@ class OverlayController {
 }
 
 function contestResultText(v: SpecialView): string {
-  if (v.outcome === "draw") return "DRAW — no damage";
-  if (v.outcome === "me") return `YOU WIN · OPPONENT TAKES ${v.damage}`;
-  return `OPPONENT WINS · YOU TAKE ${v.damage}`;
+  if (v.outcome === "draw") return "DRAW — no one heals";
+  const who = v.outcome === "me" ? "YOU WIN" : "OPPONENT WINS";
+  return v.healed > 0 ? `${who} · +${v.healed} HP` : `${who} · already at full HP`;
 }
 
 function memeLabelText(label: string): string {
