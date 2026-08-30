@@ -36,7 +36,8 @@ export const PHASES = [
   "memegate",
   "live",
   /** the 6-7 rep contest — a one-time last stand opened by the first killing
-   * blow of the match; the race winner deals SPECIAL_DAMAGE to the loser */
+   * blow of the match; the race winner heals SPECIAL_HEAL (a downed winner
+   * revives to it) and fights on, the loser is left where they were */
   "special",
   /** a recurring meme-gesture race: combat freezes every MEME_RACE_TRIGGER_ATTACKS
    * casts — first to perform any trained gesture heals MEME_RACE_HEAL HP */
@@ -70,8 +71,8 @@ export const SHIELD_MAX_TICKS = TICK_HZ * 3;
 export const SPECIAL_TRIGGER_ATTACKS = 10;
 /** Reps to win outright. One rep = one confirmed alternation (see lab/counter.ts). */
 export const SPECIAL_TARGET_REPS = 67;
-/** HP knocked off the LOSER. Unlike a heal this can finish the match. */
-export const SPECIAL_DAMAGE = 10;
+/** HP the race winner is restored to / by (a last-stand winner at ≤0 revives to this). */
+export const SPECIAL_HEAL = 10;
 /** Hard cap; whoever leads on reps when it expires wins. Never let a match hang. */
 export const SPECIAL_MAX_TICKS = TICK_HZ * 60;
 /** How long the result banner keeps riding along after the contest resolves. */
@@ -197,8 +198,8 @@ export interface SpecialPublic {
   ticksLeft: number;
   /** null while running, then the seat that won (or a draw) */
   winner: Seat | "draw" | null;
-  /** HP actually taken off the loser — 0 on a draw, less than the full hit if it downed them */
-  damage: number;
+  /** HP actually restored to the winner — 0 on a draw or if they were already full */
+  healed: number;
 }
 
 /**

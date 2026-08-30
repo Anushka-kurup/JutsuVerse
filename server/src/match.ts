@@ -9,7 +9,7 @@ import {
   MEME_RACE_MAX_TICKS,
   MEME_RACE_TRIGGER_ATTACKS,
   SPECIAL_BANNER_TICKS,
-  SPECIAL_DAMAGE,
+  SPECIAL_HEAL,
   SPECIAL_MAX_TICKS,
   SPECIAL_TARGET_REPS,
   SPECIAL_TRIGGER_ATTACKS,
@@ -66,8 +66,8 @@ export interface SpecialContest {
   reps: { a: number; b: number };
   /** null while running */
   winner: Seat | "draw" | null;
-  /** HP actually taken off the loser; 0 on a draw */
-  damage: number;
+  /** HP actually restored to the winner; 0 on a draw or if already full */
+  healed: number;
   /** set on resolve; the banner rides along in "live" for SPECIAL_BANNER_TICKS */
   resolvedAtTick: number | null;
 }
@@ -342,8 +342,9 @@ export function tickMatch(m: MatchSession): MatchSession {
   const settled = !pendingAttacks.a && !pendingAttacks.b;
   const lethal = fighters.a.hp <= 0 || fighters.b.hp <= 0;
   // The first killing blow of the match opens the 6-7 contest instead of ending
-  // it — one last rep race where the winner deals SPECIAL_DAMAGE to the loser
-  // (see resolveSpecial). Fires once; a later killing blow just ends the match.
+  // it — one last rep race whose winner heals SPECIAL_HEAL (a downed winner
+  // revives to it, see resolveSpecial). Fires once; a later killing blow, or
+  // losing this race while downed, just ends the match.
   const lastStand = lethal && settled && !m.specialTriggered;
 
   let phase: Phase = "live";
@@ -435,8 +436,8 @@ function decayMemeBanner(mc: MemeChallenge | null, tick: number): MemeChallenge 
 }
 
 /** Freeze combat and open the last-stand 6-7 contest on the first killing blow.
- * Seals in progress are dropped; HP is kept (the near-dead fighter is still at
- * ≤0 — the contest winner deals SPECIAL_DAMAGE to the loser, see resolveSpecial). */
+ * Seals in progress are dropped; HP is kept (the downed fighter is still at ≤0
+ * until/unless they win the race and revive — see resolveSpecial). */
 function enterSpecial(m: MatchSession, tick: number): MatchSession {
   return {
     ...m,
@@ -452,7 +453,7 @@ function enterSpecial(m: MatchSession, tick: number): MatchSession {
       endTick: tick + SPECIAL_MAX_TICKS,
       reps: { a: 0, b: 0 },
       winner: null,
-      damage: 0,
+      healed: 0,
       resolvedAtTick: null,
     },
   };
@@ -485,31 +486,28 @@ function resolveSpecial(
 ): MatchSession {
   const sp = m.special!;
   let fighters = m.fighters;
-  let damage = 0;
-  let phase: Phase = "live";
-  let matchWinner = m.winner;
+  let healed = 0;
 
   if (winner !== "draw") {
-    // The prize is damage to the loser, not a heal for the winner, so unlike
-    // every other contest outcome this one can end the match outright.
-    const loserSeat = OTHER[winner];
-    const before = fighters[loserSeat].hp;
-    const loser = takeDamage(fighters[loserSeat], tick, SPECIAL_DAMAGE, true);
-    damage = before - loser.hp; // short of the full hit when it downed them
-    fighters = { ...fighters, [loserSeat]: loser };
-    if (loser.hp <= 0) {
-      phase = "ended";
-      matchWinner = winner;
-    }
+    const before = fighters[winner];
+    // a last-stand winner is sitting at ≤0 HP — winning the race always buys
+    // the comeback, so revive to SPECIAL_HEAL flat rather than adding to a
+    // negative; a healthy winner just tops up toward MAX_HP.
+    const healedFighter = before.hp <= 0
+      ? { ...before, hp: SPECIAL_HEAL }
+      : heal(before, SPECIAL_HEAL);
+    healed = healedFighter.hp - before.hp; // 0 if already at full HP
+    fighters = { ...fighters, [winner]: healedFighter };
   }
 
+  // Back to live — if the downed fighter didn't win, they're still at ≤0 and
+  // the next tick ends the match normally (specialTriggered blocks a re-open).
   return {
     ...m,
     tick,
-    phase,
-    winner: matchWinner,
+    phase: "live",
     fighters,
-    special: { ...sp, winner, damage, resolvedAtTick: tick },
+    special: { ...sp, winner, healed, resolvedAtTick: tick },
   };
 }
 
@@ -561,7 +559,7 @@ export function specialPublic(m: MatchSession): SpecialPublic | undefined {
     target: SPECIAL_TARGET_REPS,
     ticksLeft: sp.winner === null ? Math.max(0, sp.endTick - m.tick) : 0,
     winner: sp.winner,
-    damage: sp.damage,
+    healed: sp.healed,
   };
 }
 
