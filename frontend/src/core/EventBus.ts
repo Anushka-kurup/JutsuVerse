@@ -28,7 +28,7 @@ export const Events = {
   SIXSEVEN_REPS: "sixseven-reps", // (reps: number) — my local count changed
   SIXSEVEN_SIGNAL: "sixseven-signal", // ({ d, valid, pose }) — live detector feedback
 
-  // ── meme-gesture challenge (memegate: starts the match; memerace: mid-battle bonus) ──
+  // ── meme-gesture challenge (memegate: starts the match; memerace: recurring mid-battle bonus) ──
   MEME_RECOGNIZED: "meme-recognized", // ({ label: string }) — I performed the current target
   MEME_SIGNAL: "meme-signal", // ({ tracked: boolean }) — live detector feedback
 

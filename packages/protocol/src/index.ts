@@ -37,9 +37,9 @@ export const PHASES = [
   "live",
   /** the 6-7 rep contest, triggered every SPECIAL_TRIGGER_ATTACKS casts */
   "special",
-  /** a second, independent, ONE-TIME bonus round: a random meme gesture,
-   * triggered the first time either fighter's HP drops by MEME_RACE_HP_THRESHOLD
-   * — first to perform it heals MEME_HEAL HP */
+  /** a recurring meme-gesture race: combat freezes every MEME_RACE_TRIGGER_ATTACKS
+   * casts (yielding the slot to the 6-7 contest) — first to perform any trained
+   * gesture heals MEME_RACE_HEAL HP */
   "memerace",
   "ended",
 ] as const;
@@ -76,16 +76,20 @@ export const SPECIAL_MAX_TICKS = TICK_HZ * 60;
 /** How long the result banner keeps riding along after the contest resolves. */
 export const SPECIAL_BANNER_TICKS = TICK_HZ * 3;
 
-// ── meme-gesture challenges (memegate starts a match; memerace is a bonus round) ──
-/** Hard cap for the pre-match gate; nobody managing it re-rolls a fresh label. */
-export const MEME_GATE_MAX_TICKS = TICK_HZ * 20;
-/** HP either fighter has to have lost (from full) to trigger the ONE-TIME mid-battle
- * meme race. Doesn't re-arm afterward — it fires at most once per match. */
-export const MEME_RACE_HP_THRESHOLD = 2;
-/** HP restored to whoever performs the meme race's label first. */
-export const MEME_HEAL = 2;
-/** Hard cap for the mid-battle race; nobody managing it resolves as a no-op draw. */
-export const MEME_RACE_MAX_TICKS = TICK_HZ * 20;
+// ── meme-gesture challenges (memegate starts a match; memerace is a recurring bonus) ──
+/** Countdown for the pre-match gate. On expiry the match just starts, with no
+ * bonus; performing the gesture before it runs out earns MEME_GATE_BONUS_HP. */
+export const MEME_GATE_MAX_TICKS = TICK_HZ * 10;
+/** Extra starting HP (on top of MAX_HP) for the player who performs the gate
+ * gesture first — 35 vs the usual 30. */
+export const MEME_GATE_BONUS_HP = 5;
+/** Combined casts by BOTH fighters that open a meme race. It yields the slot to
+ * the 6-7 contest, so races land on casts 5, 15, 25… and 6-7 on 10, 20, 30…. */
+export const MEME_RACE_TRIGGER_ATTACKS = 5;
+/** HP restored to whoever performs a trained gesture first in the meme race. */
+export const MEME_RACE_HEAL = 1;
+/** Hard cap for the meme race; nobody managing it resolves as a no-op draw. */
+export const MEME_RACE_MAX_TICKS = TICK_HZ * 10;
 /** How long the result banner keeps riding along after the race resolves. */
 export const MEME_BANNER_TICKS = TICK_HZ * 3;
 
@@ -197,11 +201,13 @@ export interface SpecialPublic {
 }
 
 /**
- * A meme-gesture challenge as both clients see it — used for both memegate
- * (starting the match) and memerace (the mid-battle bonus round).
+ * A meme-gesture challenge as both clients see it — the pre-match memegate or a
+ * mid-battle memerace.
  */
 export interface MemeChallengePublic {
   label: string;
+  /** web path of the meme image under BASE_URL (e.g. "memes/img/dab.jpeg"); "" if none */
+  image: string;
   /** ticks remaining before the hard cap; 0 once resolved */
   ticksLeft: number;
   /** which seats have already performed the label */
@@ -234,7 +240,7 @@ export type ServerMsg =
       ready?: { a: boolean; b: boolean };
       /** present during the 6-7 contest and for a few ticks after it resolves */
       special?: SpecialPublic;
-      /** present during memegate/memerace and for a few ticks after either resolves */
+      /** present during memegate/memerace and for a few ticks after a race resolves */
       memeChallenge?: MemeChallengePublic;
     }
   | { type: "error"; code: string; message: string };

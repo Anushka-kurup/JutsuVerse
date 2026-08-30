@@ -244,7 +244,7 @@ body {
 #startgate {
   position: absolute;
   left: 50%;
-  top: 16%;
+  top: 27%;
   transform: translateX(-50%);
   z-index: 25;
   width: min(440px, 90vw);
@@ -667,7 +667,7 @@ body {
   gap: 10px;
   padding: 6px 10px;
   border-top: 1px solid var(--line);
-  background: rgba(228, 217, 190, 0.8);
+  background: #e7dec6; /* solid — no arena behind the dock */
 }
 
 #skill-dock[hidden] {
@@ -1233,7 +1233,7 @@ body {
   color: var(--muted);
 }
 
-/* ── meme-gesture challenge (memegate starts the match; memerace is a bonus round) ── */
+/* ── meme-gesture challenge (memegate starts the match; memerace is a recurring bonus) ── */
 #memechallenge {
   position: absolute;
   left: 50%;
@@ -1276,6 +1276,20 @@ body {
   color: var(--muted);
 }
 
+.meme-pic {
+  display: block;
+  margin: 0 auto 0.7rem;
+  max-height: 180px;
+  max-width: 100%;
+  border-radius: 10px;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.meme-pic[hidden] {
+  display: none;
+}
+
 .meme-label {
   margin: 0 0 0.9rem;
   font-family: Impact, system-ui, sans-serif;
@@ -1308,6 +1322,18 @@ body {
 
 .meme-side[data-side="me"] .meme-done {
   color: #7ee0ff;
+}
+
+.meme-clock {
+  margin: 0.8rem 0 0;
+  font-family: monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.meme-clock.urgent {
+  color: #ff5470;
 }
 
 .meme-status {

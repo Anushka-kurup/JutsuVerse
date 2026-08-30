@@ -217,9 +217,13 @@ export function blockAttack(f: Fighter): Fighter {
   };
 }
 
-/** Restore HP, capped at MAX_HP. Used by the 6-7 contest reward. */
+/**
+ * Restore HP for a contest reward (6-7 or meme race). Capped at MAX_HP, but a
+ * fighter already above it (the memegate bonus can start someone at 35) keeps
+ * what they have — a heal never lowers HP.
+ */
 export function heal(f: Fighter, amount: number): Fighter {
-  return { ...f, hp: Math.min(MAX_HP, f.hp + amount) };
+  return { ...f, hp: Math.min(Math.max(f.hp, MAX_HP), f.hp + amount) };
 }
 
 /**

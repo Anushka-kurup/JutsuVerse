@@ -95,11 +95,13 @@ class OverlayController {
           <div class="meme-body">
             <p class="meme-title">MEME CHALLENGE</p>
             <p class="meme-hint">Try the gesture below, or any other meme gesture you've got — first one recognized wins.</p>
+            <img class="meme-pic" alt="" hidden>
             <p class="meme-label">—</p>
             <div class="meme-scores">
               ${this.memeSideHtml("me", "YOU")}
               ${this.memeSideHtml("opp", "OPPONENT")}
             </div>
+            <p class="meme-clock">—</p>
             <p class="meme-status"></p>
             <p class="meme-result" hidden></p>
           </div>
@@ -333,7 +335,7 @@ class OverlayController {
     </div>`;
   }
 
-  // ── meme-gesture challenge (memegate starts the match; memerace is a bonus round) ──
+  // ── meme-gesture challenge (memegate starts the match; memerace is a recurring bonus) ──
   /** Challenge mode hides the seal furniture; the gesture is nothing like a seal. */
   showMemeChallenge(): void {
     this.memeChallenge.hidden = false;
@@ -342,6 +344,9 @@ class OverlayController {
     const result = this.memeChallenge.querySelector<HTMLElement>(".meme-result")!;
     result.hidden = true;
     result.textContent = "";
+    const pic = this.memeChallenge.querySelector<HTMLImageElement>(".meme-pic")!;
+    pic.hidden = true;
+    pic.removeAttribute("src");
     for (const side of ["me", "opp"] as Side[]) this.memeSides[side].textContent = "—";
   }
 
@@ -350,17 +355,32 @@ class OverlayController {
     this.setMemeChallengeMode(false);
   }
 
-  /** Seal furniture stays hidden only while combat is actually frozen (memerace) or
-   * the match hasn't started yet (memegate) — see setContestMode's own note. */
+  /** Seal furniture stays hidden while combat is frozen (memerace) or the match
+   * hasn't started yet (memegate) — see setContestMode's own note. */
   setMemeChallengeMode(on: boolean): void {
     this.overlayEl.classList.toggle("meme-mode", on);
   }
 
   setMemeChallenge(v: MemeChallengeView): void {
     this.memeChallenge.querySelector(".meme-label")!.textContent = memeLabelText(v.label);
+
+    const pic = this.memeChallenge.querySelector<HTMLImageElement>(".meme-pic")!;
+    if (v.image) {
+      const url = import.meta.env.BASE_URL + v.image;
+      if (pic.getAttribute("src") !== url) pic.src = url;
+      pic.alt = memeLabelText(v.label);
+      pic.hidden = false;
+    } else {
+      pic.hidden = true;
+      pic.removeAttribute("src");
+    }
+
     for (const side of ["me", "opp"] as Side[]) {
       this.memeSides[side].textContent = v.done[side] ? "✓" : "—";
     }
+    const clock = this.memeChallenge.querySelector<HTMLElement>(".meme-clock")!;
+    clock.textContent = v.outcome ? "" : `${v.secondsLeft}s`;
+    clock.classList.toggle("urgent", !v.outcome && v.secondsLeft <= 3);
 
     const result = this.memeChallenge.querySelector<HTMLElement>(".meme-result")!;
     result.hidden = v.outcome === null;

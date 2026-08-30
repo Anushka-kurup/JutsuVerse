@@ -17,7 +17,7 @@ import { StateSync, type NetState } from "../network/StateSync";
 import { VideoCall } from "../network/VideoCall";
 import type { MemeChallengeView, SpecialView } from "../network/NetworkClient";
 import { Overlay } from "../ui/Overlay";
-import { skillById, type Phase, type Seat, type Side } from "../types";
+import { type Phase, type Seat, type Side } from "../types";
 
 /**
  * Assembles the battle. The server owns the game now:
@@ -41,7 +41,7 @@ export class BattleScene extends Phaser.Scene {
   private inSpecial = false;
 
   private memeBridge!: MemeBridge;
-  /** true during memegate (pre-match) or memerace (mid-battle bonus) */
+  /** true during memegate (pre-match) or a memerace (mid-battle heal round) */
   private inMemeChallenge = false;
   private currentMemeLabel: string | null = null;
 
@@ -88,12 +88,6 @@ export class BattleScene extends Phaser.Scene {
     // pre-round: enable camera to ready up, then the meme-gate starts the match
     Overlay.showPrep();
     Overlay.setPrepStatus("Enable your camera to ready up");
-    // TEMP central buttons — cast a jutsu directly (fires its seal sequence)
-    Overlay.showSkillTest((skillId) => {
-      if (!this.started) return;
-      const sk = skillById(skillId);
-      if (sk) for (const seal of sk.seals) net.sendSeal(seal);
-    });
 
     this.input.keyboard?.on("keydown-D", this.toggleDebug, this);
     this.input.keyboard?.on("keydown-G", this.toggleGuide, this);
@@ -215,7 +209,7 @@ export class BattleScene extends Phaser.Scene {
     Overlay.setContestMode(false);
   }
 
-  // ── meme-gesture challenge (memegate starts the match; memerace is a bonus round) ──
+  // ── meme-gesture challenge (memegate starts the match; memerace is a recurring bonus) ──
   private onMemeRecognized(p: { label: string }): void {
     if (this.inMemeChallenge) net.sendMeme(p.label);
   }

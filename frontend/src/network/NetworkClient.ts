@@ -27,10 +27,12 @@ export interface SpecialView {
 /** A meme-gesture challenge (memegate or memerace) from the local player's point of view. */
 export interface MemeChallengeView {
   label: string;
+  /** meme image web path relative to BASE_URL (e.g. "memes/img/dab.jpeg"); "" if none */
+  image: string;
   /** whole seconds left before the hard cap; 0 once it has resolved */
   secondsLeft: number;
   done: { me: boolean; opp: boolean };
-  /** null while running; only memerace can end in a "draw" (a timeout) */
+  /** null while running; only a memerace can end in a "draw" (a timeout) */
   outcome: "me" | "opp" | "draw" | null;
   healed: number;
 }
@@ -190,6 +192,7 @@ export class NetworkClient {
     const iAmA = this.seat !== "b";
     return {
       label: mc.label,
+      image: mc.image,
       secondsLeft: Math.ceil(mc.ticksLeft / TICK_HZ),
       done: { me: iAmA ? mc.done.a : mc.done.b, opp: iAmA ? mc.done.b : mc.done.a },
       outcome:
@@ -209,7 +212,7 @@ export class NetworkClient {
     this.sock.send({ type: "reps", seq: ++this.seq, reps, tClient: performance.now() });
   }
 
-  /** I performed `label` — the server checks it against the active memegate/memerace target. */
+  /** I performed `label` — the server checks it against the active memegate or memerace. */
   sendMeme(label: string): void {
     this.sock.send({ type: "meme", seq: ++this.seq, label });
   }
