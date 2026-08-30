@@ -9,7 +9,7 @@ import {
   MEME_RACE_MAX_TICKS,
   MEME_RACE_TRIGGER_ATTACKS,
   SHIELD_MAX_TICKS,
-  SPECIAL_HEAL,
+  SPECIAL_DAMAGE,
   SPECIAL_TARGET_REPS,
   SPECIAL_TRIGGER_ATTACKS,
   type Seat,
@@ -74,7 +74,7 @@ function contestMatch(
       endTick: 10_000,
       reps,
       winner: null,
-      healed: 0,
+      damage: 0,
       resolvedAtTick: null,
       ...over,
     },
@@ -427,49 +427,51 @@ test("entering the contest drops seals in progress but keeps HP and shields", ()
   assert.equal(m.fighters.b.currentHold, null);
 });
 
-test("first to the target heals and combat resumes", () => {
+test("first to the target damages the loser and combat resumes", () => {
   const m = contestMatch({ a: SPECIAL_TARGET_REPS, b: 40 });
-  m.fighters.a = { ...m.fighters.a, hp: 5 };
   const next = tickMatch(m);
   assert.equal(next.phase, "live");
   assert.equal(next.special?.winner, "a");
-  assert.equal(next.special?.healed, SPECIAL_HEAL);
-  assert.equal(next.fighters.a.hp, 5 + SPECIAL_HEAL);
-  assert.equal(next.fighters.b.hp, MAX_HP);
+  assert.equal(next.special?.damage, SPECIAL_DAMAGE);
+  assert.equal(next.fighters.b.hp, MAX_HP - SPECIAL_DAMAGE);
+  assert.equal(next.fighters.a.hp, MAX_HP, "the winner's own HP is untouched");
 });
 
-test("winning at full health heals nothing", () => {
+test("winning at full health still costs the loser", () => {
   const m = contestMatch({ a: SPECIAL_TARGET_REPS, b: 0 });
   const next = tickMatch(m);
   assert.equal(next.special?.winner, "a");
-  assert.equal(next.special?.healed, 0);
+  assert.equal(next.special?.damage, SPECIAL_DAMAGE);
   assert.equal(next.fighters.a.hp, MAX_HP);
+  assert.equal(next.fighters.b.hp, MAX_HP - SPECIAL_DAMAGE);
 });
 
-test("the heal is capped at full health", () => {
-  const m = contestMatch({ a: 0, b: SPECIAL_TARGET_REPS });
-  m.fighters.b = { ...m.fighters.b, hp: MAX_HP - 3 };
+test("losing the contest on low HP ends the match", () => {
+  const m = contestMatch({ a: SPECIAL_TARGET_REPS, b: 3 });
+  m.fighters.b = { ...m.fighters.b, hp: 4 };
   const next = tickMatch(m);
-  assert.equal(next.special?.healed, 3);
-  assert.equal(next.fighters.b.hp, MAX_HP);
+  assert.equal(next.fighters.b.hp, 0);
+  assert.equal(next.special?.damage, 4, "reports what actually landed, not the full hit");
+  assert.equal(next.phase, "ended");
+  assert.equal(next.winner, "a");
 });
 
 test("the time cap awards the contest to whoever is ahead", () => {
   const m = contestMatch({ a: 12, b: 31 }, { endTick: 1 });
-  m.fighters.b = { ...m.fighters.b, hp: 4 };
   const next = tickMatch(m);
   assert.equal(next.phase, "live");
   assert.equal(next.special?.winner, "b");
-  assert.equal(next.fighters.b.hp, 4 + SPECIAL_HEAL);
+  assert.equal(next.fighters.a.hp, MAX_HP - SPECIAL_DAMAGE);
+  assert.equal(next.fighters.b.hp, MAX_HP);
 });
 
-test("a tied contest heals nobody", () => {
+test("a tied contest damages nobody", () => {
   const m = contestMatch({ a: 9, b: 9 }, { endTick: 1 });
   m.fighters.a = { ...m.fighters.a, hp: 6 };
   m.fighters.b = { ...m.fighters.b, hp: 6 };
   const next = tickMatch(m);
   assert.equal(next.special?.winner, "draw");
-  assert.equal(next.special?.healed, 0);
+  assert.equal(next.special?.damage, 0);
   assert.equal(next.fighters.a.hp, 6);
   assert.equal(next.fighters.b.hp, 6);
 });
@@ -491,7 +493,6 @@ test("rep counts only ever move forward, and only during the contest", () => {
 
 test("the contest result rides along briefly, then clears", () => {
   let m = contestMatch({ a: SPECIAL_TARGET_REPS, b: 0 });
-  m.fighters.a = { ...m.fighters.a, hp: 1 };
   m = tickMatch(m);
   assert.equal(specialPublic(m)?.winner, "a");
   assert.equal(specialPublic(m)?.ticksLeft, 0);

@@ -30,9 +30,9 @@ rematches.
   charges when raised.
 - Every five attacks by both players combined, combat freezes for the **6-7
   contest**: both players perform the 6-7 gesture on camera and the first to 67
-  reps restores 10 HP (nothing happens if they are already at full health). A
+  reps deals 10 damage to the loser — enough to finish a match outright. A
   60-second cap awards it to whoever leads, so a dropped camera cannot hang the
-  match; a tie heals no one. The counter re-arms, so it triggers again at ten
+  match; a tie damages no one. The counter re-arms, so it triggers again at ten
   attacks, fifteen, and so on.
 
 The attack definitions and image paths live in `shared/skills.ts`. The 14 valid

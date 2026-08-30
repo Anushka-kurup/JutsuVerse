@@ -20,6 +20,9 @@ export class BootScene extends Phaser.Scene {
     for (const skill of SKILLS) {
       if (skill.image) this.load.image(`jutsu-${skill.id}`, `${BASE}${skill.image}`);
     }
+    // Wind is no longer a castable element, so this art is loaded on its own —
+    // the 6-7 contest rains it down on whoever lost.
+    this.load.image("wind-gust", `${BASE}img/ninjutsu/Wind/Wind1.png`);
   }
 
   create(): void {

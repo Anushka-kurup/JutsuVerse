@@ -69,8 +69,8 @@ export const SHIELD_MAX_TICKS = TICK_HZ * 3;
 export const SPECIAL_TRIGGER_ATTACKS = 10;
 /** Reps to win outright. One rep = one confirmed alternation (see lab/counter.ts). */
 export const SPECIAL_TARGET_REPS = 67;
-/** HP restored to the winner, clamped to MAX_HP. */
-export const SPECIAL_HEAL = 10;
+/** HP knocked off the LOSER. Unlike a heal this can finish the match. */
+export const SPECIAL_DAMAGE = 10;
 /** Hard cap; whoever leads on reps when it expires wins. Never let a match hang. */
 export const SPECIAL_MAX_TICKS = TICK_HZ * 60;
 /** How long the result banner keeps riding along after the contest resolves. */
@@ -196,8 +196,8 @@ export interface SpecialPublic {
   ticksLeft: number;
   /** null while running, then the seat that won (or a draw) */
   winner: Seat | "draw" | null;
-  /** HP actually restored — 0 when the winner was already at full health */
-  healed: number;
+  /** HP actually taken off the loser — 0 on a draw, less than the full hit if it downed them */
+  damage: number;
 }
 
 /**

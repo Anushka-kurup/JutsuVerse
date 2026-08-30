@@ -39,6 +39,10 @@ export class BattleScene extends Phaser.Scene {
   private sixSeven!: SixSevenBridge;
   /** true while the 6-7 contest has combat frozen */
   private inSpecial = false;
+  /** the contest result arrives on every frame for 3s — only react to it once */
+  private contestResultShown = false;
+  /** which side lost the contest, held back until the result banner clears */
+  private pendingRainOn: Side | null = null;
 
   private memeBridge!: MemeBridge;
   /** true during memegate (pre-match) or a memerace (mid-battle heal round) */
@@ -181,10 +185,31 @@ export class BattleScene extends Phaser.Scene {
     if (this.inSpecial) Overlay.setContestSignal(s.valid);
   }
 
+  /**
+   * Remember who lost, but hold the rain. The result banner sits on screen for
+   * three seconds after the contest resolves, and the gusts land once it clears.
+   */
+  private armContestRain(v: SpecialView): void {
+    if (v.outcome === null || this.contestResultShown) return;
+    this.contestResultShown = true;
+    // "me" means I won, so the rain falls on the other side; a draw rains on nobody
+    this.pendingRainOn = v.outcome === "me" ? "opp" : v.outcome === "opp" ? "me" : null;
+  }
+
+  private releaseContestRain(): void {
+    const side = this.pendingRainOn;
+    if (!side) return;
+    this.pendingRainOn = null;
+    const spawn = side === "me" ? SPAWN.me : SPAWN.opp;
+    this.fx.rain(spawn.x, spawn.y);
+  }
+
   /** Swap the seal detector out for the rep detector — both read the same camera. */
   private enterSpecial(): void {
     if (this.inSpecial) return;
     this.inSpecial = true;
+    this.contestResultShown = false;
+    this.pendingRainOn = null;
     this.matcher.reset();
     net.setHeldSign(null);
     this.bridge.pauseDetection();
@@ -297,8 +322,13 @@ export class BattleScene extends Phaser.Scene {
     if (m.phase === "special") this.enterSpecial();
     else if (this.inSpecial) this.exitSpecial();
 
-    if (m.special) Overlay.setContest(m.special);
-    else Overlay.hideContest();
+    if (m.special) {
+      Overlay.setContest(m.special);
+      this.armContestRain(m.special);
+    } else {
+      Overlay.hideContest();
+      this.releaseContestRain(); // the banner is gone — now it rains
+    }
 
     if (m.phase === "memegate" || m.phase === "memerace") {
       if (m.memeChallenge) this.enterMemeChallenge(m.memeChallenge);
@@ -328,6 +358,7 @@ export class BattleScene extends Phaser.Scene {
       this.startPressed = false;
       this.matcher.reset();
       Overlay.hideContest();
+      this.releaseContestRain();
       Overlay.hideMemeChallenge();
       const iWon = m.winner !== "draw" && m.winner === net.mySeat;
       this.scene.launch("Result", { winner: m.winner ?? "draw", iWon });
